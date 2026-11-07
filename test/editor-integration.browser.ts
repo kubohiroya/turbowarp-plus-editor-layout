@@ -103,7 +103,26 @@ test('the pinned GUI uses its existing editor slots for Dockview sprite tabs',
 
         const secondTab = dockviewTabs.filter({hasText: 'ライム'});
         const secondBounds = await secondTab.boundingBox();
+        const preview = await firstTab.evaluateHandle(tab => {
+            const iconSize = (element: Element) => {
+                const {width, height} = element.querySelector('.tw-plus-sprite-tab-icon').getBoundingClientRect();
+                return {width, height};
+            };
+            const sizes = {tab: iconSize(tab), preview: undefined as ReturnType<typeof iconSize> | undefined};
+            tab.addEventListener('dragstart', (event: DragEvent) => {
+                const transfer = event.dataTransfer;
+                const setDragImage = transfer.setDragImage.bind(transfer);
+                transfer.setDragImage = (element, x, y) => {
+                    sizes.preview = iconSize(element);
+                    setDragImage(element, x, y);
+                };
+            }, {capture: true, once: true});
+            return sizes;
+        });
         await firstTab.dragTo(secondTab, {targetPosition: {x: secondBounds.width - 5, y: secondBounds.height / 2}});
+        const sizes = await preview.jsonValue();
+        await preview.dispose();
+        assert.deepEqual(sizes.preview, sizes.tab, 'The drag preview keeps the sprite icon at tab size');
         await expect(dockviewTabs).toHaveText(['ライム', 'ダンゴ']);
         await firstTab.click();
         await expect.poll(() => page.evaluate(() => window.vm.editingTarget.id)).toBe(first);
