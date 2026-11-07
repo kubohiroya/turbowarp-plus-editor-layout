@@ -123,7 +123,14 @@ test('the sprite toolbar selects one section and searches in the active section'
         return tab.boundingBox();
     }));
     const panel = await page.getByRole('tabpanel').boundingBox();
-    assert.ok(tabBounds.every((tab, index) => tab.height >= 44 && tab.x + tab.width <= panel.x &&
+    const share = await strip.evaluate(rail => {
+        const {paddingTop, paddingBottom, rowGap} = getComputedStyle(rail);
+        const buttons = rail.childElementCount;
+        const reserved = parseFloat(paddingTop) + parseFloat(paddingBottom) + parseFloat(rowGap) * (buttons - 1);
+        return (rail.clientHeight - reserved) / buttons;
+    });
+    assert.ok(tabBounds.every((tab, index) => tab.height > tab.width && Math.abs(tab.height - share) < 1 &&
+        tab.x + tab.width <= panel.x &&
         tab.x === tabBounds[0].x && (!index || tab.y > tabBounds[index - 1].y)));
     await selected.hover();
     await expect(tooltip).toHaveText('コード');
@@ -178,6 +185,7 @@ test('the sprite toolbar selects one section and searches in the active section'
     await selected.press('End');
     await expect(selected).toHaveAccessibleName('Variables');
     await expect(selected).toBeFocused();
+    await expect(selected).toHaveCSS('height', '44px');
     await expect(tooltip).toHaveText('Variables');
     assert.ok(await strip.evaluate(element => element.scrollTop > 0));
 });

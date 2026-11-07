@@ -57,7 +57,7 @@
 
 .tw-plus-sprite-toolbar-sections button {
     display: inline-flex;
-    flex: none;
+    flex: 1 0 0px;
     align-items: center;
     justify-content: center;
     min-width: 44px;
