@@ -4,15 +4,37 @@ interface SpriteLayoutCommands {
     close(): void;
     canClose(): boolean;
     canSplit?(): boolean;
+    openPanel?(): void;
+    canOpenPanel?(): boolean;
+    openPalette?(): void;
+    canOpenPalette?(): boolean;
 }
 
 const labels = {
-    ja: ['編集パネルのレイアウト', 'パネルを横に分割', 'パネルを縦に分割', 'この分割パネルを閉じる'],
-    en: ['Editor panel layout', 'Split right', 'Split below', 'Close this split']
+    ja: ['編集パネルのレイアウト', 'パネルを横に分割', 'パネルを縦に分割', 'この分割パネルを閉じる',
+        'パネルを別画面で開く', 'ブロックパレットを別画面で開く'],
+    en: ['Editor panel layout', 'Split right', 'Split below', 'Close this split',
+        'Open panel in another window', 'Open block palette in another window']
 };
 
+function createIcon(document: Document, path: string) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const icon = document.createElementNS(ns, 'svg');
+    icon.setAttribute('viewBox', '0 0 16 16');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.setAttribute('fill', 'none');
+    icon.setAttribute('stroke', 'currentColor');
+    icon.setAttribute('stroke-width', '1.4');
+    icon.setAttribute('stroke-linejoin', 'round');
+    icon.setAttribute('stroke-linecap', 'round');
+    const shape = document.createElementNS(ns, 'path');
+    shape.setAttribute('d', path);
+    icon.append(shape);
+    return icon;
+}
+
 export function createSpriteLayoutMenu(document: Document, locale: string, commands: SpriteLayoutCommands) {
-    const [title, right, below, closeLabel] = /^ja(?:-|$)/i.test(locale) ? labels.ja : labels.en;
+    const [title, right, below, closeLabel, panelLabel, paletteLabel] = /^ja(?:-|$)/i.test(locale) ? labels.ja : labels.en;
     const element = document.createElement('div');
     element.className = 'tw-plus-sprite-layout-menu';
     const trigger = document.createElement('button');
@@ -22,35 +44,35 @@ export function createSpriteLayoutMenu(document: Document, locale: string, comma
     trigger.setAttribute('aria-label', title);
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
-    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    icon.setAttribute('viewBox', '0 0 16 16');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.setAttribute('fill', 'none');
-    icon.setAttribute('stroke', 'currentColor');
-    icon.setAttribute('stroke-width', '1.4');
-    const shape = document.createElementNS(icon.namespaceURI, 'path');
-    shape.setAttribute('d', 'M2.5 3.5h11v9h-11zM2.5 6.5h11m-7 0v6');
-    icon.append(shape);
-    trigger.append(icon);
+    trigger.append(createIcon(document, 'M2.5 3.5h11v9h-11zM2.5 6.5h11m-7 0v6'));
     element.append(trigger);
 
     const popup = document.createElement('div');
     popup.className = 'tw-plus-sprite-layout-menu-popup';
     popup.setAttribute('role', 'menu');
     popup.setAttribute('aria-label', title);
-    const buttons = [[right, commands.splitRight], [below, commands.splitBelow], [closeLabel, commands.close]].map(
-        ([label, run]: [string, () => void]) => {
-            const item = document.createElement('button');
-            item.type = 'button';
-            item.textContent = label;
-            item.tabIndex = -1;
-            item.setAttribute('role', 'menuitem');
-            item.addEventListener('click', () => {
-                close(true);
-                run();
-            });
-            return item;
+    const items = [
+        {label: right, run: commands.splitRight, enabled: commands.canSplit, path: 'M2.5 3.5h11v9h-11zM8 3.5v9'},
+        {label: below, run: commands.splitBelow, enabled: commands.canSplit, path: 'M2.5 3.5h11v9h-11zM2.5 8h11'},
+        {label: closeLabel, run: commands.close, enabled: commands.canClose, path: 'm4.5 4.5 7 7m0-7-7 7'},
+        {label: panelLabel, run: commands.openPanel, enabled: commands.canOpenPanel, path: 'M7 3H3v10h10V9m-5-1 5-5m-4 0h4v4'},
+        {label: paletteLabel, run: commands.openPalette, enabled: commands.canOpenPalette,
+            path: 'M7 4H3v3h2v2H3v3h7v-2h2V9m-3-2 4-4m-3 0h3v3'}
+    ];
+    const entries = items.flatMap(({label, run, enabled, path}) => {
+        if (!run) return [];
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.append(createIcon(document, path), label);
+        item.tabIndex = -1;
+        item.setAttribute('role', 'menuitem');
+        item.addEventListener('click', () => {
+            close(true);
+            run();
         });
+        return [{item, enabled}];
+    });
+    const buttons = entries.map(({item}) => item);
     popup.append(...buttons);
     let openedIn: Document | undefined;
     let topLayer = false;
@@ -73,8 +95,7 @@ export function createSpriteLayoutMenu(document: Document, locale: string, comma
     function open(last = false) {
         if (openedIn) return;
         openedIn = trigger.ownerDocument;
-        buttons[0].disabled = buttons[1].disabled = commands.canSplit?.() === false;
-        buttons[2].disabled = !commands.canClose();
+        for (const {item, enabled} of entries) item.disabled = enabled?.() === false;
         topLayer = typeof popup.showPopover === 'function';
         if (topLayer) {
             popup.setAttribute('popover', 'manual');
