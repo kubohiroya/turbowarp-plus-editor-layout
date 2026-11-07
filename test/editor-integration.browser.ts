@@ -21,7 +21,7 @@ test('the sprite tab header shares theme colors and marks the selected tab',
         const tabStrip = group.locator('.dv-tabs-and-actions-container');
         const selectedTab = group.locator('.dv-tab.dv-active-tab');
         const inactiveLabel = group.locator('.dv-inactive-tab .dv-default-tab-content');
-        const toolbar = group.locator('.tw-plus-sprite-toolbar');
+        const toolbar = group.locator('.tw-plus-sprite-toolbar-sections');
 
         await page.goto(withFlags(pinned, {}));
         await expect(toolbar).toBeVisible();
@@ -153,6 +153,11 @@ test('the pinned GUI uses its existing editor slots for Dockview sprite tabs',
             window.vm.setEditingTarget(stage.id);
             return stage.getName();
         });
+        const backdrops = editor.getByRole('tab', {name: '背景', exact: true});
+        await backdrops.hover();
+        await expect(editor.locator('.tw-plus-sprite-toolbar-tooltip')).toHaveText('背景');
+        await backdrops.click();
+        await expect(backdrops).toHaveAttribute('aria-selected', 'true');
         await dockviewTabs.getByText(stageName, {exact: true}).click({button: 'right'});
         await expect(rename).toHaveCount(0);
     });

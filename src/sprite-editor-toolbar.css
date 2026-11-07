@@ -1,26 +1,48 @@
+.tw-plus-sprite-tab-slot--split:has(> .tw-plus-sprite-tab-toolbar > .tw-plus-sprite-toolbar) {
+    display: grid;
+    position: relative;
+    grid-template:
+        "sections tools" auto
+        "sections body" minmax(0, 1fr) / auto minmax(0, 1fr);
+}
+
+.tw-plus-sprite-tab-slot--split:dir(rtl):has(> .tw-plus-sprite-tab-toolbar > .tw-plus-sprite-toolbar) {
+    grid-template:
+        "tools sections" auto
+        "body sections" minmax(0, 1fr) / minmax(0, 1fr) auto;
+}
+
+.tw-plus-sprite-tab-toolbar:has(> .tw-plus-sprite-toolbar),
+.tw-plus-sprite-toolbar {
+    display: contents;
+}
+
+.tw-plus-sprite-tab-slot--split > .tw-plus-sprite-tab-body {
+    grid-area: body;
+}
+
 .tw-plus-sprite-toolbar {
     --tw-plus-toolbar-height: 28px;
     --tw-plus-toolbar-radius: 999px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 8px;
-    padding: 6px;
+    --tw-plus-toolbar-background: var(--dv-activegroup-visiblepanel-tab-background-color, var(--ui-white, light-dark(#fff, #111)));
     color-scheme: var(--color-scheme, light);
     color: var(--text-primary, #2c3650);
-    background: var(--dv-activegroup-visiblepanel-tab-background-color, var(--ui-white, light-dark(#fff, #111)));
-    border-block-end: 1px solid var(--ui-black-transparent, #d5dbe3);
 }
 
 .tw-plus-sprite-toolbar[data-active-group="false"] {
-    background: var(--dv-inactivegroup-visiblepanel-tab-background-color, var(--ui-tertiary, light-dark(#eee, #2e2e2e)));
+    --tw-plus-toolbar-background: var(--dv-inactivegroup-visiblepanel-tab-background-color, var(--ui-tertiary, light-dark(#eee, #2e2e2e)));
 }
 
 .tw-plus-sprite-toolbar-sections {
+    grid-area: sections;
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 4px;
-    min-width: 0;
+    padding: 6px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    background: var(--tw-plus-toolbar-background);
+    border-right: 1px solid var(--ui-black-transparent, #d5dbe3);
 }
 
 .tw-plus-sprite-toolbar-sections button,
@@ -35,13 +57,14 @@
 
 .tw-plus-sprite-toolbar-sections button {
     display: inline-flex;
+    flex: none;
     align-items: center;
-    gap: 4px;
-    padding: 0 8px;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 13px 8px;
     background: light-dark(#f4f4f4, #303030);
     color: light-dark(#595959, #bdbdbd);
-    font-size: 12px;
-    font-weight: 600;
     cursor: pointer;
 }
 
@@ -60,18 +83,39 @@
 
 .tw-plus-sprite-toolbar svg { width: 16px; height: 16px; flex: none; }
 
+.tw-plus-sprite-toolbar-tooltip {
+    grid-area: tools / tools / body / body;
+    position: absolute;
+    z-index: 6;
+    left: 4px;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+    transform: translateY(-50%);
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: light-dark(#2c3650, #eee);
+    color: light-dark(#fff, #222);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+}
+
 .tw-plus-sprite-toolbar-tools {
+    grid-area: tools;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     min-inline-size: 0;
-    margin-inline-start: auto;
+    padding-inline: 6px;
+    background: var(--tw-plus-toolbar-background);
 }
 
 .tw-plus-sprite-search {
     position: relative;
     inline-size: 132px;
     min-inline-size: 0;
+    margin-block: 4px;
 }
 
 .tw-plus-sprite-search-field { position: relative; }

@@ -97,17 +97,44 @@ function SearchBox({viewId, section, japanese, search}: {
 
 export function SpriteEditorToolbar({viewId, locale, section, onSectionChange, isStage, activeGroup, search,
     availableSections = spriteEditorSections, propertiesInVariables = false, actions}: SpriteEditorToolbarProps) {
+    const [tooltip, setTooltip] = React.useState<{button: HTMLButtonElement; id: SpriteEditorSection; y: number}>();
     const japanese = /^ja(?:-|$)/i.test(locale);
     const labels = japanese ? {code: 'コード', costumes: isStage ? '背景' : 'コスチューム', sounds: '音', variables: propertiesInVariables ? '変数など' : '変数'} :
         {code: 'Code', costumes: isStage ? 'Backdrops' : 'Costumes', sounds: 'Sounds', variables: propertiesInVariables ? 'Properties & Variables' : 'Variables'};
+
+    function showTooltip(button: HTMLButtonElement, id: SpriteEditorSection) {
+        const tab = button.getBoundingClientRect();
+        const rail = button.parentElement.getBoundingClientRect();
+        const y = (tab.top + tab.bottom) / 2;
+        setTooltip(y >= rail.top && y <= rail.bottom ? {button, id, y: y - rail.top} : undefined);
+    }
+
+    function hideTooltip(button: HTMLButtonElement) {
+        setTooltip(current => current?.button === button ? undefined : current);
+    }
+
     return <div className="tw-plus-sprite-toolbar" data-active-group={activeGroup}>
-        <div className="tw-plus-sprite-toolbar-sections" role="tablist"
-            aria-label={japanese ? 'スプライトの編集内容' : 'Sprite editor sections'}>
+        <div className="tw-plus-sprite-toolbar-sections" role="tablist" aria-orientation="vertical"
+            aria-label={japanese ? 'スプライトの編集内容' : 'Sprite editor sections'}
+            onScroll={() => { if (tooltip) showTooltip(tooltip.button, tooltip.id); }}>
             {availableSections.map((id, index) => <button key={id} type="button" role="tab"
-                id={viewId + '-section-' + id} aria-selected={section === id} tabIndex={section === id ? 0 : -1}
+                id={viewId + '-section-' + id} aria-label={labels[id]} aria-selected={section === id}
+                tabIndex={section === id ? 0 : -1}
+                onMouseEnter={event => showTooltip(event.currentTarget, id)}
+                onMouseLeave={event => {
+                    if (!event.currentTarget.matches(':focus-visible')) hideTooltip(event.currentTarget);
+                }}
+                onFocus={event => {
+                    if (event.currentTarget.matches(':focus-visible')) showTooltip(event.currentTarget, id);
+                }}
+                onBlur={event => hideTooltip(event.currentTarget)}
                 aria-controls={viewId + '-content'} onClick={() => onSectionChange(id)} onKeyDown={event => {
-                    const direction = event.currentTarget.ownerDocument.dir === 'rtl' ? -1 : 1;
-                    const next = {ArrowLeft: index - direction, ArrowRight: index + direction,
+                    if (event.key === 'Escape' && tooltip) {
+                        event.stopPropagation();
+                        setTooltip(undefined);
+                        return;
+                    }
+                    const next = {ArrowUp: index - 1, ArrowDown: index + 1,
                         Home: 0, End: availableSections.length - 1}[event.key];
                     if (next === undefined) return;
                     event.preventDefault();
@@ -116,9 +143,10 @@ export function SpriteEditorToolbar({viewId, locale, section, onSectionChange, i
                     event.currentTarget.parentElement.querySelectorAll<HTMLButtonElement>('button')[position]?.focus();
                 }}>
                 <Icon kind={id} />
-                {labels[id]}
             </button>)}
         </div>
+        {tooltip && <span className="tw-plus-sprite-toolbar-tooltip" aria-hidden="true"
+            style={{top: tooltip.y}}>{labels[tooltip.id]}</span>}
         {(search || actions) && <div className="tw-plus-sprite-toolbar-tools">
             {actions}
             {search && <SearchBox {...{viewId, section, japanese, search}} />}
