@@ -8,12 +8,12 @@
     padding: 6px;
     color-scheme: var(--color-scheme, light);
     color: var(--text-primary, #2c3650);
-    background: light-dark(#e7e7e7, #4a4a4a);
+    background: var(--dv-activegroup-visiblepanel-tab-background-color, var(--ui-white, light-dark(#fff, #111)));
     border-block-end: 1px solid var(--ui-black-transparent, #d5dbe3);
 }
 
 .tw-plus-sprite-toolbar[data-active-group="false"] {
-    background: light-dark(#e2e2e2, #454545);
+    background: var(--dv-inactivegroup-visiblepanel-tab-background-color, var(--ui-tertiary, light-dark(#eee, #2e2e2e)));
 }
 
 .tw-plus-sprite-toolbar-sections {

@@ -115,7 +115,7 @@ test('the sprite toolbar selects one section and searches in the active section'
     await expect(selected).toHaveCSS('background-color', 'rgb(103, 71, 168)');
     await expect(unselected.first()).toHaveCSS('color', 'rgb(89, 89, 89)');
     await expect(unselected.first()).toHaveCSS('background-color', 'rgb(244, 244, 244)');
-    await expect(strip).toHaveCSS('background-color', 'rgb(231, 231, 231)');
+    await expect(strip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await selected.press('ArrowRight');
     await expect(selected).toHaveText('コスチューム');
     await expect(selected).toHaveCount(1);
@@ -136,13 +136,17 @@ test('the sprite toolbar selects one section and searches in the active section'
     await expect(selected).toHaveText('Costumes');
     await page.evaluate(() => {
         document.documentElement.style.setProperty('--color-scheme', 'dark');
+        document.documentElement.style.setProperty('--dv-activegroup-visiblepanel-tab-background-color', '#111');
+        document.documentElement.style.setProperty('--dv-inactivegroup-visiblepanel-tab-background-color', '#2e2e2e');
         document.documentElement.style.setProperty('--input-background', 'rgb(46, 52, 64)');
     });
     await expect(selected).toHaveCSS('background-color', 'rgb(103, 71, 168)');
     await expect(unselected.first()).toHaveCSS('color', 'rgb(189, 189, 189)');
     await expect(unselected.first()).toHaveCSS('background-color', 'rgb(48, 48, 48)');
-    await expect(strip).toHaveCSS('background-color', 'rgb(74, 74, 74)');
+    await expect(strip).toHaveCSS('background-color', 'rgb(17, 17, 17)');
     await expect(search).toHaveCSS('background-color', 'rgb(46, 52, 64)');
+    await strip.evaluate(element => element.setAttribute('data-active-group', 'false'));
+    await expect(strip).toHaveCSS('background-color', 'rgb(46, 46, 46)');
 });
 
 

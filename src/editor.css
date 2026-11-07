@@ -636,6 +636,21 @@ details.layout-menu button {
     opacity: 1;
 }
 
+:global([class*="gui_page-wrapper_"]):has(.sprite-tabs),
+.sprite-tabs {
+    --plus-sprite-tab-strip-background: light-dark(var(--ui-primary, #f3f3f3), #333333);
+}
+
+:global([class*="gui_page-wrapper_"]):has(.sprite-tabs) > :global([class*="gui_menu-bar-position_"]) {
+    --menu-bar-foreground: var(--text-primary, #333);
+    background: var(--plus-sprite-tab-strip-background);
+}
+
+:global([class*="gui_page-wrapper_"]):has(.sprite-tabs) > :global([class*="gui_menu-bar-position_"])
+    :global([class*="menu-bar_file-group_"] [class*="menu-bar_menu-bar-item_"] > img) {
+    filter: brightness(.42) var(--filter-icon-gray, grayscale(100%));
+}
+
 .sprite-tabs {
     display: flex;
     flex: 1 1 0;
@@ -646,7 +661,7 @@ details.layout-menu button {
 .sprite-tabs :global(.dockview-theme-light) {
     color-scheme: var(--color-scheme, light);
     --dv-group-view-background-color: var(--ui-primary, #fff);
-    --dv-tabs-and-actions-container-background-color: var(--ui-primary, #f3f3f3);
+    --dv-tabs-and-actions-container-background-color: var(--plus-sprite-tab-strip-background);
     --dv-activegroup-visiblepanel-tab-background-color: var(--ui-white, #fff);
     --dv-activegroup-visiblepanel-tab-color: var(--text-primary, #333);
     --dv-activegroup-hiddenpanel-tab-background-color: var(--ui-secondary, #ececec);
@@ -657,6 +672,14 @@ details.layout-menu button {
     --dv-inactivegroup-hiddenpanel-tab-color: var(--text-primary, #333);
     --dv-sash-color: var(--ui-black-transparent, #0002);
     --dv-active-sash-color: var(--looks-secondary, #855cd6);
+}
+
+.sprite-tabs :global(.dv-tabs-container > .dv-inactive-tab .dv-default-tab-content) {
+    color: light-dark(#6b6b6b, #aaa);
+}
+
+.sprite-tabs :global(.dv-tabs-container > .dv-active-tab) {
+    box-shadow: inset 0 -2px #d63b3b;
 }
 
 .standard-body:has(.sprite-tabs[data-multi-view]) .floating-stage {

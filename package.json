@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-plus-editor-layout",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Resizable panes and layout for TurboWarp Plus Editor",
   "type": "module",
   "license": "GPL-3.0-or-later",
