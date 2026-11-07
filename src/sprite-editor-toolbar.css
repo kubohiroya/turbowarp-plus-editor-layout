@@ -37,7 +37,6 @@
     grid-area: sections;
     display: flex;
     flex-direction: column;
-    gap: 4px;
     padding: 6px;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -62,6 +61,7 @@
     justify-content: center;
     min-width: 44px;
     min-height: 44px;
+    margin-block: 4px;
     padding: 13px 8px;
     background: light-dark(#f4f4f4, #303030);
     color: light-dark(#595959, #bdbdbd);

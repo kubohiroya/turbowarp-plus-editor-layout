@@ -116,22 +116,27 @@ test('the sprite toolbar selects one section and searches in the active section'
     await expect(strip).toHaveAttribute('aria-orientation', 'vertical');
     await expect(tabs).toHaveCount(4);
     await expect(selected).toHaveAccessibleName('コード');
+    const buttonMargin = 4;
     const tabBounds = await Promise.all((await tabs.all()).map(async tab => {
         await expect(tab).toHaveText('');
+        await expect(tab).toHaveCSS('margin-top', `${buttonMargin}px`);
+        await expect(tab).toHaveCSS('margin-bottom', `${buttonMargin}px`);
         await expect(tab).toHaveCSS('padding-top', '13px');
         await expect(tab).toHaveCSS('padding-bottom', '13px');
         return tab.boundingBox();
     }));
     const panel = await page.getByRole('tabpanel').boundingBox();
-    const share = await strip.evaluate(rail => {
-        const {paddingTop, paddingBottom, rowGap} = getComputedStyle(rail);
+    const share = await strip.evaluate((rail, margin) => {
+        const {paddingTop, paddingBottom} = getComputedStyle(rail);
         const buttons = rail.childElementCount;
-        const reserved = parseFloat(paddingTop) + parseFloat(paddingBottom) + parseFloat(rowGap) * (buttons - 1);
+        const reserved = parseFloat(paddingTop) + parseFloat(paddingBottom) + 2 * margin * buttons;
         return (rail.clientHeight - reserved) / buttons;
-    });
-    assert.ok(tabBounds.every((tab, index) => tab.height > tab.width && Math.abs(tab.height - share) < 1 &&
-        tab.x + tab.width <= panel.x &&
-        tab.x === tabBounds[0].x && (!index || tab.y > tabBounds[index - 1].y)));
+    }, buttonMargin);
+    assert.ok(tabBounds.every((tab, index) => {
+        const previous = tabBounds[index - 1];
+        return tab.height > tab.width && Math.abs(tab.height - share) < 1 && tab.x + tab.width <= panel.x &&
+            tab.x === tabBounds[0].x && (!previous || Math.abs(tab.y - previous.y - previous.height - 2 * buttonMargin) < 0.1);
+    }));
     await selected.hover();
     await expect(tooltip).toHaveText('コード');
     assert.ok((await tooltip.boundingBox()).x >= panel.x);
