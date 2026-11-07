@@ -297,8 +297,11 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             if (multiView) {
                 element.classList.add('tw-plus-sprite-tab-slot--split');
                 body.className = 'tw-plus-sprite-tab-body';
-                if (toolbar) body.setAttribute('role', 'tabpanel');
-                if (toolbar) element.append(toolbar);
+                if (toolbar) {
+                    body.setAttribute('role', 'tabpanel');
+                    toolbar.className = 'tw-plus-sprite-tab-toolbar';
+                    element.append(toolbar);
+                }
                 if (assetPreview) {
                     assetPreview.className = 'tw-plus-sprite-tab-asset-preview';
                     assetPreview.hidden = true;

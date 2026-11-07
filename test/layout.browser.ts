@@ -107,19 +107,41 @@ test('the sprite toolbar selects one section and searches in the active section'
         body: 'export default window.React;'
     }));
     await page.goto(origin + toolbar);
-    const strip = page.locator('.tw-plus-sprite-toolbar');
+    const toolbarRoot = page.locator('.tw-plus-sprite-toolbar');
+    const strip = page.getByRole('tablist');
+    const tooltip = page.locator('.tw-plus-sprite-toolbar-tooltip');
     const selected = page.getByRole('tab', {selected: true});
     const unselected = page.getByRole('tab', {selected: false});
-    await expect(page.getByRole('tab')).toHaveCount(4);
-    await expect(selected).toHaveText('コード');
+    const tabs = strip.getByRole('tab');
+    await expect(strip).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(tabs).toHaveCount(4);
+    await expect(selected).toHaveAccessibleName('コード');
+    const tabBounds = await Promise.all((await tabs.all()).map(async tab => {
+        await expect(tab).toHaveText('');
+        await expect(tab).toHaveCSS('padding-top', '13px');
+        await expect(tab).toHaveCSS('padding-bottom', '13px');
+        return tab.boundingBox();
+    }));
+    const panel = await page.getByRole('tabpanel').boundingBox();
+    assert.ok(tabBounds.every((tab, index) => tab.height >= 44 && tab.x + tab.width <= panel.x &&
+        tab.x === tabBounds[0].x && (!index || tab.y > tabBounds[index - 1].y)));
+    await selected.hover();
+    await expect(tooltip).toHaveText('コード');
+    assert.ok((await tooltip.boundingBox()).x >= panel.x);
+    await page.mouse.move(800, 400);
+    await expect(tooltip).toHaveCount(0);
     await expect(selected).toHaveCSS('background-color', 'rgb(103, 71, 168)');
     await expect(unselected.first()).toHaveCSS('color', 'rgb(89, 89, 89)');
     await expect(unselected.first()).toHaveCSS('background-color', 'rgb(244, 244, 244)');
     await expect(strip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-    await selected.press('ArrowRight');
-    await expect(selected).toHaveText('コスチューム');
+    await selected.press('ArrowDown');
+    await expect(selected).toHaveAccessibleName('コスチューム');
+    await expect(selected).toBeFocused();
+    await expect(tooltip).toHaveText('コスチューム');
+    await selected.press('Escape');
+    await expect(tooltip).toHaveCount(0);
     await expect(selected).toHaveCount(1);
-    await expect(unselected.first()).toHaveText('コード');
+    await expect(unselected.first()).toHaveAccessibleName('コード');
     await expect(unselected.first()).toHaveCSS('color', 'rgb(89, 89, 89)');
     const search = page.getByRole('combobox');
     await expect(search).toHaveAttribute('placeholder', '検索');
@@ -133,7 +155,11 @@ test('the sprite toolbar selects one section and searches in the active section'
 
     await page.getByRole('button', {name: 'English'}).click();
     await expect(search).toHaveAttribute('placeholder', 'Search');
-    await expect(selected).toHaveText('Costumes');
+    await expect(selected).toHaveAccessibleName('Costumes');
+    await page.getByRole('button', {name: 'Switch target'}).click();
+    await selected.hover();
+    await expect(selected).toHaveAccessibleName('Backdrops');
+    await expect(tooltip).toHaveText('Backdrops');
     await page.evaluate(() => {
         document.documentElement.style.setProperty('--color-scheme', 'dark');
         document.documentElement.style.setProperty('--dv-activegroup-visiblepanel-tab-background-color', '#111');
@@ -145,8 +171,15 @@ test('the sprite toolbar selects one section and searches in the active section'
     await expect(unselected.first()).toHaveCSS('background-color', 'rgb(48, 48, 48)');
     await expect(strip).toHaveCSS('background-color', 'rgb(17, 17, 17)');
     await expect(search).toHaveCSS('background-color', 'rgb(46, 52, 64)');
-    await strip.evaluate(element => element.setAttribute('data-active-group', 'false'));
+    await toolbarRoot.evaluate(element => element.setAttribute('data-active-group', 'false'));
     await expect(strip).toHaveCSS('background-color', 'rgb(46, 46, 46)');
+
+    await page.locator('.tw-plus-sprite-tab-slot--split').evaluate(element => {element.style.height = '120px';});
+    await selected.press('End');
+    await expect(selected).toHaveAccessibleName('Variables');
+    await expect(selected).toBeFocused();
+    await expect(tooltip).toHaveText('Variables');
+    assert.ok(await strip.evaluate(element => element.scrollTop > 0));
 });
 
 

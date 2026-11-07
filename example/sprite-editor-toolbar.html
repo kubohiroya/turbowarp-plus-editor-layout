@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="../src/sprite-layout-menu.css">
 <style>
     .pane { width: min(680px, 100%); font: 13px system-ui, sans-serif; container-type: inline-size; }
+    .tw-plus-sprite-tab-slot--split { height: 260px; }
 </style>
 <div class="pane" id="root"></div>
 <div id="header" style="width: 150px; height: 30px; overflow: hidden; transform: translateX(0)"></div>
@@ -27,18 +28,24 @@
         const [locale, setLocale] = React.useState('ja');
         const [section, setSection] = React.useState('code');
         const [result, setResult] = React.useState('');
+        const [isStage, setIsStage] = React.useState(false);
         return React.createElement(React.Fragment, null,
             React.createElement('button', {onClick: () => setLocale('en')}, 'English'),
-            React.createElement(SpriteEditorToolbar, {
-                viewId: 'demo', locale, section, onSectionChange: setSection, activeGroup: true,
-                search: {
-                    find: query => ['First block', 'Second block'].filter(label => label.includes(query))
-                        .map(label => ({id: label, label})),
-                    select: ({label}, currentSection) => setResult(currentSection + ': ' + label)
-                }
-            }),
-            React.createElement('div', {id: 'demo-content', role: 'tabpanel',
-                'aria-labelledby': 'demo-section-' + section}, result)
+            React.createElement('button', {onClick: () => setIsStage(stage => !stage)}, 'Switch target'),
+            React.createElement('div', {className: 'tw-plus-sprite-tab-slot--split'},
+                React.createElement('div', {className: 'tw-plus-sprite-tab-toolbar'},
+                    React.createElement(SpriteEditorToolbar, {
+                        viewId: 'demo', locale, section, isStage, onSectionChange: setSection, activeGroup: true,
+                        search: {
+                            find: query => ['First block', 'Second block'].filter(label => label.includes(query))
+                                .map(label => ({id: label, label})),
+                            select: ({label}, currentSection) => setResult(currentSection + ': ' + label)
+                        }
+                    })
+                ),
+                React.createElement('div', {id: 'demo-content', role: 'tabpanel', className: 'tw-plus-sprite-tab-body',
+                    'aria-labelledby': 'demo-section-' + section}, result)
+            )
         );
     }
     ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Example));
