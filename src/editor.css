@@ -701,7 +701,8 @@ details.layout-menu button {
     height: 100%;
 }
 
-.sprite-tabs :global(.tw-plus-sprite-tab-icon) {
+/* Dockview renders the drag preview outside the sprite tab strip. */
+:global(.tw-plus-sprite-tab-icon) {
     flex: none;
     width: 1rem;
     height: 1rem;
