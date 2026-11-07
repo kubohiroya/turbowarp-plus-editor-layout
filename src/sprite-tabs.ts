@@ -154,6 +154,7 @@ interface TabOptions<Snapshot = unknown> {
     variables?: boolean;
     locale?: string;
     viewAdapter?: SpriteTabAdapter<Snapshot>;
+    popouts?: {url: string; className?: string; openPalette?(view: SpriteTabView): void};
     park?(): void;
     renameLabels?: RenameLabels;
     onToolbarSlots?(slots: readonly ToolbarSlot[]): void;
@@ -258,6 +259,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     let restoreFrame: number | undefined;
     let restoreTimeout: number | undefined;
     let saveFrame: number | undefined;
+    const openingGroups = new Set<string>();
     const originalTargets = () => vm.runtime.targets.filter(target => target.isOriginal);
 
     const dockview = createDockview(root, {
@@ -353,15 +355,59 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         if (event.kind === 'edge' || event.kind === 'content' && event.position !== 'center') event.preventDefault();
     };
     const overlay = !multiView && dockview.onWillShowOverlay(preventSplit);
-    const drop = !multiView && dockview.onWillDrop(preventSplit);
+    const drop = dockview.onWillDrop(event => {
+        if (!multiView) {
+            preventSplit(event);
+            return;
+        }
+        if (event.group?.api.location.type !== 'popout') return;
+        const transfer = event.getData();
+        const ids = transfer?.panelId ? [transfer.panelId] :
+            dockview.groups.find(group => group.id === transfer?.groupId)?.panels.map(panel => panel.id) ?? [];
+        if (ids.some(id => documents.has(id))) event.preventDefault();
+    });
 
     function createLayoutMenu(group: DockviewGroupPanel) {
+        const popouts = options.popouts;
+        const canOpenPanel = () => group.api.location.type === 'grid' &&
+            !openingGroups.has(group.id) && views.has(group.activePanel?.id);
+        const codeView = () => {
+            const view = views.get(group.activePanel?.id);
+            return view?.section === 0 ? view : undefined;
+        };
         const menu = createSpriteLayoutMenu(document, locale, {
             splitRight: () => { if (group.activePanel) split('right', group.activePanel.id); },
             splitBelow: () => { if (group.activePanel) split('below', group.activePanel.id); },
             close: () => { if (group.activePanel) closeSplit(group.activePanel.id); },
             canClose: () => canCloseGroup(group),
-            canSplit: () => views.has(group.activePanel?.id)
+            canSplit: () => views.has(group.activePanel?.id),
+            ...(popouts && {
+                canOpenPanel,
+                openPanel() {
+                    const panel = group.activePanel;
+                    if (!panel || !canOpenPanel()) return;
+                    openingGroups.add(group.id);
+                    void dockview.addPopoutGroup(panel, {
+                        popoutUrl: popouts.url,
+                        onDidOpen({window: child}) {
+                            child.addEventListener('load', () => {
+                                const doc = child.document;
+                                doc.title = panel.title;
+                                doc.documentElement.dir = document.documentElement.dir;
+                                doc.documentElement.lang = document.documentElement.lang;
+                                doc.documentElement.style.cssText = document.documentElement.style.cssText;
+                                doc.body.className = `${document.body.className} ${popouts.className ?? ''}`;
+                            }, {once: true});
+                        }
+                    })
+                        .finally(() => openingGroups.delete(group.id));
+                },
+                canOpenPalette: () => Boolean(codeView()),
+                openPalette: popouts.openPalette && (() => {
+                    const view = codeView();
+                    if (view && activateView(view.id)) popouts.openPalette(describe(view));
+                })
+            })
         });
         return {...menu, init() {}};
     }
@@ -672,7 +718,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     function writeLayout() {
         saveFrame = undefined;
         const targets = originalTargets();
-        if (!persistence || pendingRestore || syncing || !targets.length || persistence.isProjectLoading?.()) return;
+        if (!persistence || pendingRestore || syncing || !targets.length || persistence.isProjectLoading?.() ||
+            dockview.groups.some(group => group.api.location.type === 'popout')) return;
         const {grid, activeGroup} = dockview.toJSON();
         if (!activeGroup || grid.width <= 0 || grid.height <= 0) return;
         const panels: Record<string, PanelReference> = Object.create(null);
@@ -886,7 +933,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             selection.dispose();
             removal.dispose();
             if (overlay) overlay.dispose();
-            if (drop) drop.dispose();
+            drop.dispose();
             if (layout) layout.dispose();
             for (const view of views.values()) disposeView(view);
             content.remove();
@@ -1019,6 +1066,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
             variables: hasVariables,
             locale: props.locale,
             viewAdapter: props.viewAdapter,
+            popouts: props.popouts && {...props.popouts, className: props.className},
             onToolbarSlots: hasToolbar ? setToolbarSlots : undefined,
             onAssetPreviewSlots: hasAssetPreview ? setAssetPreviewSlots : undefined
         });
@@ -1033,7 +1081,8 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
             instance.dispose();
         };
     }, [content, props.enabled, props.vm, props.reopenLabel, props.multiView, props.locale,
-        props.viewAdapter, props.stagePane, props.layoutStorage, props.renameLabels, hasVariables, hasToolbar, hasAssetPreview]);
+        props.viewAdapter, props.stagePane, props.layoutStorage, props.renameLabels, props.popouts, props.className,
+        hasVariables, hasToolbar, hasAssetPreview]);
     React.useLayoutEffect(() => {
         controller.current?.syncActiveSection(props.activeSection);
     }, [props.activeSection]);

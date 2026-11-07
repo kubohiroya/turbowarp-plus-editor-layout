@@ -280,7 +280,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const [expanded, setExpanded] = useState(false);
         const tools = useContext(targetTools);
         return plusLayout ? element('div', {className: styles.spriteProperties},
-            inEditor ? element('span', {className: styles.spritePropertiesTitle}, isJapanese(locale) ? 'スプライト' : 'Sprite') :
+            !inEditor &&
                 element('button', {
                     type: 'button', className: styles.spritePropertiesToggle, 'aria-expanded': expanded,
                     onClick: () => setExpanded(open => !open)

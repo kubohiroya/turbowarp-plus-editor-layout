@@ -36,7 +36,9 @@
 }
 
 .tw-plus-sprite-layout-menu-popup button {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 6px 8px;
     color: inherit;
@@ -47,6 +49,8 @@
     font: inherit;
     cursor: pointer;
 }
+
+.tw-plus-sprite-layout-menu-popup svg { width: 16px; height: 16px; flex: none; }
 
 .tw-plus-sprite-layout-menu-popup button:disabled { opacity: 0.55; cursor: default; }
 .tw-plus-sprite-layout-menu-popup button:enabled:is(:hover, :focus-visible) {
