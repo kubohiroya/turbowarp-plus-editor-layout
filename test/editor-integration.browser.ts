@@ -11,6 +11,45 @@ function withFlags(base: string, flags: Record<string, string>) {
     return url.href;
 }
 
+test('the sprite tab header shares theme colors and marks the selected tab',
+    {skip: !pinned, timeout: 30_000}, async t => {
+        const browser = await chromium.launch({args: ['--enable-unsafe-swiftshader']});
+        t.after(() => browser.close());
+        const page = await browser.newPage({viewport: {width: 1360, height: 900}, colorScheme: 'light'});
+        const menuBar = page.locator('[class*="gui_menu-bar-position_"]');
+        const group = page.locator('.dv-groupview.dv-active-group');
+        const tabStrip = group.locator('.dv-tabs-and-actions-container');
+        const selectedTab = group.locator('.dv-tab.dv-active-tab');
+        const inactiveLabel = group.locator('.dv-inactive-tab .dv-default-tab-content');
+        const toolbar = group.locator('.tw-plus-sprite-toolbar');
+
+        await page.goto(withFlags(pinned, {}));
+        await expect(toolbar).toBeVisible();
+        await page.evaluate(async () => {
+            const original = window.vm.editingTarget.id;
+            await window.vm.duplicateSprite(original);
+            window.vm.setEditingTarget(original);
+        });
+        await expect(inactiveLabel).toHaveCSS('color', 'rgb(107, 107, 107)');
+        await expect(selectedTab).toHaveCSS('box-shadow', /rgb\(214, 59, 59\).*inset/);
+        await expect(menuBar).toHaveCSS('background-color', await tabStrip.evaluate(el => getComputedStyle(el).backgroundColor));
+        await expect(toolbar).toHaveCSS('background-color', await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor));
+
+        await page.emulateMedia({colorScheme: 'dark'});
+        await expect(selectedTab).toHaveCSS('background-color', 'rgb(17, 17, 17)');
+        await expect(tabStrip).toHaveCSS('background-color', 'rgb(51, 51, 51)');
+        await expect(menuBar).toHaveCSS('background-color', 'rgb(51, 51, 51)');
+        await expect(toolbar).toHaveCSS('background-color', 'rgb(17, 17, 17)');
+        await expect(inactiveLabel).toHaveCSS('color', 'rgb(170, 170, 170)');
+        await inactiveLabel.click();
+        await expect(selectedTab).toHaveCSS('box-shadow', /rgb\(214, 59, 59\).*inset/);
+        await expect(group.locator('.dv-tab.dv-inactive-tab')).toHaveCSS('box-shadow', 'none');
+
+        await page.goto(withFlags(pinned, {twPlusDockviewSpriteTabs: '0'}));
+        await expect(toolbar).toHaveCount(0);
+        await expect(menuBar).toHaveCSS('background-color', 'rgb(51, 51, 51)');
+    });
+
 test('the pinned GUI uses its existing editor slots for Dockview sprite tabs',
     {skip: !pinned, timeout: 45_000}, async t => {
         const browser = await chromium.launch({args: ['--enable-unsafe-swiftshader']});
