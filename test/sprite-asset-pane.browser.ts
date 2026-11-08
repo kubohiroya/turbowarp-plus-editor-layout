@@ -28,20 +28,27 @@ let editable = true;
 let value = 5;
 let x = 10;
 let activateOnClick = false;
+let locale = 'en';
+let withEdit = false;
 window.selections = [];
 window.writes = [];
+window.edits = [];
 function render(synchronous = true) {
     const props = kind === 'variables' ? {
         variables:[{id:'speed', name:'Speed', value, scope:'local'}],
         targetId:'sprite',
         properties:{name:'Dango', x},
         onWriteProperties(_id, patch) { x = patch.x; render(false); },
-        onWrite(id, next) { window.writes.push([id, next]); value = next; render(false); }
+        onWrite(id, next) { window.writes.push([id, next]); value = next; render(false); },
+        onEdit: withEdit ? edit => {
+            window.edits.push(edit);
+            if (edit.type !== 'delete' && !edit.name.trim()) return 'emptyName';
+        } : undefined
     } : {
         items:assets[kind], selectedId,
         onSelect(id) { window.selections.push(id); selectedId = id; render(); }
     };
-    const pane = React.createElement(SpriteAssetPane, {...props, editable, locale:'en', kind});
+    const pane = React.createElement(SpriteAssetPane, {...props, editable, locale, kind});
     const container = React.createElement('div', {style:{height:'100%'}, onClickCapture(event) {
         if (editable || !activateOnClick) return;
         event.preventDefault();
@@ -55,10 +62,11 @@ function render(synchronous = true) {
 window.mode = next => { editable = next; render(); };
 window.section = (next, id) => { kind = next; selectedId = id; render(); };
 window.enableClickActivation = (enabled = true) => { activateOnClick = enabled; };
+window.variableEditing = (nextLocale = 'en') => { withEdit = true; locale = nextLocale; kind = 'variables'; render(); };
 render();
 </script>`;
 
-test('assets keep selection and dimensions while inactive; variables retain and commit an edit once', async t => {
+async function openPage(t) {
     const browser = await chromium.launch({executablePath: process.env.SPRITE_PROPERTIES_CHROME});
     t.after(() => browser.close());
     const page = await browser.newPage({viewport: {width: 640, height: 480}});
@@ -86,6 +94,11 @@ test('assets keep selection and dimensions while inactive; variables retain and 
         });
     });
     await page.goto(origin);
+    return page;
+}
+
+test('assets keep selection and dimensions while inactive; variables retain and commit an edit once', async t => {
+    const page = await openPage(t);
     const box = locator => locator.boundingBox();
     for (const [kind, id, selected, other, image] of [
         ['costumes', 'c1', 'Circle', 'Other', 'Circle'],
@@ -133,4 +146,41 @@ test('assets keep selection and dimensions while inactive; variables retain and 
     await speed.blur();
     assert.equal(await speed.inputValue(), '7');
     assert.deepEqual(await page.evaluate(() => window.writes), [['speed', 7]]);
+});
+
+test('variable create, rename and delete open a Scratch-style modal dialog', async t => {
+    const page = await openPage(t);
+    await page.evaluate(() => window.variableEditing('ja'));
+    assert.deepEqual(await page.getByRole('columnheader').allTextContents(), ['変数名', '変数の値', '操作']);
+    const add = page.getByRole('button', {name: '変数を作る'});
+    const [pane, addBox] = [await page.locator('.tw-sprite-variables').boundingBox(), await add.boundingBox()];
+    assert.ok(addBox.x + addBox.width > pane.x + pane.width - 30 && addBox.y + addBox.height > pane.y + pane.height - 30,
+        'the add button sits at the bottom-right corner of the pane');
+
+    await add.click();
+    const dialog = page.getByRole('dialog', {name: '新しい変数'});
+    await dialog.waitFor();
+    const name = dialog.getByLabel('新しい変数名:');
+    assert.equal(await name.evaluate(node => node === document.activeElement), true);
+    await dialog.getByRole('button', {name: 'OK'}).click();
+    await dialog.getByRole('alert').waitFor();
+    await name.fill('score');
+    await name.press('Enter');
+    await dialog.waitFor({state: 'detached'});
+
+    await page.getByRole('button', {name: '変数名を変更'}).click();
+    const rename = page.getByRole('dialog', {name: '変数名を変更'});
+    assert.equal(await rename.getByLabel('新しい変数名:').inputValue(), 'Speed');
+    await page.keyboard.press('Escape');
+    await rename.waitFor({state: 'detached'});
+
+    await page.getByRole('button', {name: '変数を削除'}).click();
+    const remove = page.getByRole('dialog', {name: '変数を削除'});
+    await remove.getByText('変数「Speed」を削除しますか？').waitFor();
+    await remove.getByRole('button', {name: '削除'}).click();
+    await remove.waitFor({state: 'detached'});
+
+    assert.deepEqual(await page.evaluate(() => window.edits), [
+        {type: 'create', name: ''}, {type: 'create', name: 'score'}, {type: 'delete', id: 'speed'}
+    ]);
 });

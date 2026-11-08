@@ -139,13 +139,28 @@
 }
 
 .tw-sprite-variables {
+    --tw-variables-accent: var(--looks-secondary, #ff4c4c);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tw-sprite-variables__scroll {
+    flex: 1;
+    min-block-size: 0;
     padding: .6rem;
     overflow: auto;
+    container-type: inline-size;
+}
+
+/* Leave room so the floating add button never covers the last row. */
+.tw-sprite-variables__scroll--with-add {
+    padding-block-end: 4rem;
 }
 
 .tw-sprite-variables__table {
     inline-size: 100%;
-    table-layout: fixed;
     border-collapse: collapse;
     text-align: start;
 }
@@ -155,6 +170,20 @@
     padding: .35rem;
     border-block-end: 1px solid var(--ui-black-transparent, #ccd5e2);
     overflow-wrap: anywhere;
+    text-align: start;
+    vertical-align: middle;
+}
+
+.tw-sprite-variables__table thead th {
+    color: var(--text-primary-transparent, #575e75);
+    font-size: .8rem;
+    font-weight: normal;
+}
+
+.tw-sprite-variables__table .tw-sprite-variables__actions-cell {
+    inline-size: 1%;
+    white-space: nowrap;
+    overflow-wrap: normal;
 }
 
 .tw-sprite-variables__scope {
@@ -167,34 +196,51 @@
     color: #2399c2;
 }
 
-.tw-sprite-variables__editor {
+.tw-sprite-variables__icon {
+    flex: none;
+    inline-size: 1em;
+    block-size: 1em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tw-sprite-variables__actions {
     display: flex;
-    flex-wrap: wrap;
+    gap: .3rem;
+}
+
+@container (max-width: 30rem) {
+    .tw-sprite-variables__actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.tw-sprite-variables__action {
+    display: inline-flex;
     align-items: center;
-    gap: .4rem;
-    margin-block: .5rem;
-}
-
-.tw-sprite-variables__editor .tw-sprite-variables__input {
-    inline-size: min(100%, 20rem);
-}
-
-.tw-sprite-variables__editor [role="alert"] {
-    flex-basis: 100%;
-    margin: 0;
-}
-
-.tw-sprite-variables__button {
-    padding: .3rem .55rem;
+    gap: .3rem;
+    padding: .25rem .5rem;
     border: 1px solid var(--ui-black-transparent, #ccd5e2);
     border-radius: .25rem;
     color: inherit;
     background: var(--input-background, #fff);
     font: inherit;
+    font-size: .8rem;
+    cursor: pointer;
 }
 
-.tw-sprite-variables__button:disabled {
+.tw-sprite-variables__action:hover:not(:disabled) {
+    border-color: var(--tw-variables-accent);
+    color: var(--tw-variables-accent);
+}
+
+.tw-sprite-variables__action:disabled {
     opacity: .55;
+    cursor: default;
 }
 
 .tw-sprite-variables__input {
@@ -206,6 +252,188 @@
     color: inherit;
     background: var(--input-background, #fff);
     font: inherit;
+}
+
+/* Floating add button, shaped like Scratch's sprite and costume add buttons. */
+.tw-sprite-variables__add {
+    position: absolute;
+    inset-block-end: .75rem;
+    inset-inline-end: .75rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .85rem .3rem .3rem;
+    border: 1px solid var(--ui-black-transparent, #ccd5e2);
+    border-radius: 999px;
+    color: var(--text-primary, #273146);
+    background: var(--ui-white, #fff);
+    box-shadow: 0 .15rem .5rem rgba(0, 0, 0, .15);
+    font: inherit;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.tw-sprite-variables__add-icon {
+    display: grid;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--tw-variables-accent);
+    box-shadow: 0 0 0 4px var(--looks-transparent, #ff4d4d59);
+    font-size: 1.5rem;
+    transition: transform .2s, box-shadow .2s;
+}
+
+.tw-sprite-variables__add-icon .tw-sprite-variables__icon {
+    stroke-width: 2.2;
+}
+
+.tw-sprite-variables__add:hover:not(:disabled) .tw-sprite-variables__add-icon {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px var(--looks-transparent, #ff4d4d59);
+}
+
+.tw-sprite-variables__add:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+/* Modal dialog shaped like Scratch's “New Variable” prompt. */
+.tw-sprite-variables__dialog {
+    box-sizing: border-box;
+    inline-size: min(360px, calc(100vw - 2rem));
+    padding: 0;
+    overflow: hidden;
+    border: 4px solid var(--ui-white-transparent, hsla(0, 100%, 100%, .25));
+    border-radius: .5rem;
+    color: var(--text-primary, #575e75);
+    background: var(--ui-modal-background, #fff);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.tw-sprite-variables__dialog * {
+    box-sizing: border-box;
+}
+
+.tw-sprite-variables__dialog::backdrop {
+    background: var(--ui-modal-overlay, hsla(0, 100%, 65%, .9));
+}
+
+.tw-sprite-variables__dialog-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: 3.125rem;
+    padding-inline: 3rem;
+    color: var(--ui-modal-header-foreground, #fff);
+    background: var(--ui-modal-header-background, var(--tw-variables-accent));
+}
+
+.tw-sprite-variables__dialog-title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 1rem;
+    font-weight: normal;
+    letter-spacing: .4px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tw-sprite-variables__dialog-close {
+    position: absolute;
+    inset-inline-end: 1rem;
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: inherit;
+    background: var(--ui-black-transparent, hsla(0, 0%, 0%, .15));
+    box-shadow: 0 0 0 2px var(--ui-black-transparent, hsla(0, 0%, 0%, .15));
+    font-size: .8rem;
+    cursor: pointer;
+    transition: transform .15s ease-out;
+}
+
+.tw-sprite-variables__dialog-close .tw-sprite-variables__icon {
+    stroke-width: 2.4;
+}
+
+.tw-sprite-variables__dialog-close:hover {
+    transform: scale(1.1);
+}
+
+.tw-sprite-variables__dialog-body {
+    padding: 1.5rem 2.25rem;
+    background: var(--ui-modal-background, #fff);
+}
+
+.tw-sprite-variables__dialog-label {
+    display: block;
+    margin: 0 0 .75rem;
+    font-weight: 500;
+}
+
+.tw-sprite-variables__dialog-input {
+    display: block;
+    inline-size: 100%;
+    block-size: 3rem;
+    margin-block-end: 1.5rem;
+    padding: 0 1rem;
+    border: 1px solid var(--ui-black-transparent, hsla(0, 0%, 0%, .15));
+    border-radius: 5px;
+    color: var(--text-primary, #575e75);
+    background: var(--input-background, #fff);
+    font: inherit;
+    font-size: .875rem;
+}
+
+.tw-sprite-variables__dialog-input:focus {
+    border-color: var(--tw-variables-accent);
+    outline: none;
+    box-shadow: 0 0 0 .25rem var(--looks-transparent, #ff4d4d59);
+}
+
+.tw-sprite-variables__dialog-message {
+    margin: 0 0 1.5rem;
+    font-size: .875rem;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.tw-sprite-variables__dialog-error {
+    margin: -.75rem 0 1.25rem;
+    color: var(--error-primary, #ff4c4c);
+    font-size: .8rem;
+}
+
+.tw-sprite-variables__dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+}
+
+.tw-sprite-variables__dialog-button {
+    padding: .75rem 1rem;
+    border: 1px solid var(--ui-black-transparent, hsla(0, 0%, 0%, .15));
+    border-radius: .25rem;
+    color: #000;
+    background: #fff;
+    font: inherit;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tw-sprite-variables__dialog-button--ok {
+    border-color: var(--tw-variables-accent);
+    color: #fff;
+    background: var(--tw-variables-accent);
 }
 
 .tw-sprite-media--detail {
