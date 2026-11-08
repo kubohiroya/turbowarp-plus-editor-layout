@@ -3,6 +3,9 @@ import React from 'react';
 export const spriteEditorSections = ['code', 'costumes', 'sounds', 'variables', 'messages'] as const;
 export type SpriteEditorSection = typeof spriteEditorSections[number];
 
+/** The GUI owns these three panels; the rest are this package's own panes. */
+const nativeSections = new Set<SpriteEditorSection>(['code', 'costumes', 'sounds']);
+
 export interface SpriteSearchResult {
     id: string;
     label: string;
@@ -32,7 +35,7 @@ const glyphs: Record<SpriteEditorSection | 'search', string> = {
     costumes: 'm6 9 5.5-6.5a1.4 1.4 0 0 1 2 2L7.5 11m-2-2a2.5 2.5 0 0 0-3 2.5L2 14c2.7 0 5-1 5-3a2 2 0 0 0-1.5-2Z',
     sounds: 'M2 6h3l4-3v10l-4-3H2Zm9.5 0a3 3 0 0 1 0 4m2-6a5.5 5.5 0 0 1 0 8',
     variables: 'M5 2H3v12h2m6-12h2v12h-2M6 6l4 4m0-4-4 4',
-    messages: 'M2 4h12v8H2Zm0 0 6 4.5L14 4',
+    messages: 'M4 3.5h8A1.5 1.5 0 0 1 13.5 5v4a1.5 1.5 0 0 1-1.5 1.5H7.5L5 13v-2.5H4A1.5 1.5 0 0 1 2.5 9V5A1.5 1.5 0 0 1 4 3.5Z',
     search: 'M10 10l3 3M11 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z'
 };
 
@@ -122,6 +125,7 @@ export function SpriteEditorToolbar({viewId, locale, section, onSectionChange, i
             onScroll={() => { if (tooltip) showTooltip(tooltip.button, tooltip.id); }}>
             {availableSections.map((id, index) => <button key={id} type="button" role="tab"
                 id={viewId + '-section-' + id} aria-label={labels[id]} aria-selected={section === id}
+                data-section-group={nativeSections.has(id) ? 'native' : 'own'}
                 tabIndex={section === id ? 0 : -1}
                 onMouseEnter={event => showTooltip(event.currentTarget, id)}
                 onMouseLeave={event => {

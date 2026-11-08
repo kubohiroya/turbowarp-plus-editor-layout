@@ -116,34 +116,36 @@ test('the sprite toolbar selects one section and searches in the active section'
     await expect(strip).toHaveAttribute('aria-orientation', 'vertical');
     await expect(tabs).toHaveCount(5);
     await expect(selected).toHaveAccessibleName('コード');
-    const buttonMargin = 4;
     const tabBounds = await Promise.all((await tabs.all()).map(async tab => {
         await expect(tab).toHaveText('');
-        await expect(tab).toHaveCSS('margin-top', `${buttonMargin}px`);
-        await expect(tab).toHaveCSS('margin-bottom', `${buttonMargin}px`);
         await expect(tab).toHaveCSS('padding', '0px');
         return tab.boundingBox();
     }));
     const panel = await page.getByRole('tabpanel').boundingBox();
-    const share = await strip.evaluate((rail, margin) => {
-        const {paddingTop, paddingBottom} = getComputedStyle(rail);
-        const buttons = rail.childElementCount;
-        const reserved = parseFloat(paddingTop) + parseFloat(paddingBottom) + 2 * margin * buttons;
-        return (rail.clientHeight - reserved) / buttons;
-    }, buttonMargin);
+    const rail = await strip.boundingBox();
+    // A button is the size of what it shows, so the rail keeps the same shape whatever its height.
+    // The two sections that survey the sprite are set apart from the three that edit the project.
+    const gap = 2;
+    const groupGap = 9;
     assert.ok(tabBounds.every((tab, index) => {
         const previous = tabBounds[index - 1];
-        return tab.width === 24 && tab.height > tab.width && Math.abs(tab.height - share) < 1 && tab.x + tab.width <= panel.x &&
-            tab.x === tabBounds[0].x && (!previous || Math.abs(tab.y - previous.y - previous.height - 2 * buttonMargin) < 0.1);
+        const step = index === 3 ? gap + groupGap : gap;
+        return tab.width === 28 && tab.height === 28 && tab.x + tab.width <= panel.x &&
+            tab.x === tabBounds[0].x && (!previous || Math.abs(tab.y - previous.y - previous.height - step) < 0.1);
     }));
+    const lastTab = tabBounds.at(-1);
+    assert.ok(lastTab.y + lastTab.height < rail.y + rail.height - 40, 'the rail is not divided among its buttons');
     await selected.hover();
     await expect(tooltip).toHaveText('コード');
     assert.ok((await tooltip.boundingBox()).x >= panel.x);
     await page.mouse.move(800, 400);
     await expect(tooltip).toHaveCount(0);
-    await expect(selected).toHaveCSS('background-color', 'rgb(103, 71, 168)');
+    // The selection is a bar against the panel edge and a tinted icon, not a filled slab.
+    await expect(selected).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(selected).toHaveCSS('color', 'rgb(133, 92, 214)');
+    assert.equal(await selected.evaluate(node => getComputedStyle(node, '::before').backgroundColor), 'rgb(133, 92, 214)');
     await expect(unselected.first()).toHaveCSS('color', 'rgb(89, 89, 89)');
-    await expect(unselected.first()).toHaveCSS('background-color', 'rgb(244, 244, 244)');
+    await expect(unselected.first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await expect(strip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await selected.press('ArrowDown');
     await expect(selected).toHaveAccessibleName('コスチューム');
@@ -177,9 +179,10 @@ test('the sprite toolbar selects one section and searches in the active section'
         document.documentElement.style.setProperty('--dv-inactivegroup-visiblepanel-tab-background-color', '#2e2e2e');
         document.documentElement.style.setProperty('--input-background', 'rgb(46, 52, 64)');
     });
-    await expect(selected).toHaveCSS('background-color', 'rgb(103, 71, 168)');
+    await expect(selected).toHaveCSS('color', 'rgb(133, 92, 214)');
+    assert.equal(await selected.evaluate(node => getComputedStyle(node, '::before').backgroundColor), 'rgb(133, 92, 214)');
     await expect(unselected.first()).toHaveCSS('color', 'rgb(189, 189, 189)');
-    await expect(unselected.first()).toHaveCSS('background-color', 'rgb(48, 48, 48)');
+    await expect(unselected.first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await expect(strip).toHaveCSS('background-color', 'rgb(17, 17, 17)');
     await expect(search).toHaveCSS('background-color', 'rgb(46, 52, 64)');
     await toolbarRoot.evaluate(element => element.setAttribute('data-active-group', 'false'));
@@ -189,7 +192,7 @@ test('the sprite toolbar selects one section and searches in the active section'
     await selected.press('End');
     await expect(selected).toHaveAccessibleName('Messages');
     await expect(selected).toBeFocused();
-    await expect(selected).toHaveCSS('height', '44px');
+    await expect(selected).toHaveCSS('height', '28px');
     await expect(tooltip).toHaveText('Messages');
     assert.ok(await strip.evaluate(element => element.scrollTop > 0));
 });
