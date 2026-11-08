@@ -14,8 +14,10 @@ import {getDocumentWorkspace} from './document-workspace.ts';
 import type {DocumentPanelRequest} from './document-workspace.ts';
 import {readWorkspaceLayout, workspaceWithoutTransientPanels} from './workspace-layout.ts';
 import type {PanelReference, WorkspaceLayout} from './workspace-layout.ts';
+import type {SpriteVariableEdit, SpriteVariableEditError} from './sprite-variable-edit.ts';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
+export {editSpriteVariable} from './sprite-variable-edit.ts';
 
 export {useDockviewStage} from './dockview-stage.ts';
 
@@ -967,6 +969,7 @@ type SpriteTabsProps<Snapshot> = Omit<TabOptions<Snapshot>, 'activateSection' | 
     getProperties?(targetId: string): SpritePropertiesPanelProps['values'];
     writeProperties?: SpritePropertiesPanelProps['onChange'];
     writeVariable?(targetId: string, id: string, value: SpriteVariable['value']): void;
+    editVariable?(targetId: string, edit: SpriteVariableEdit): SpriteVariableEditError | void;
     getCodeSearchItems?(targetId: string): readonly SpriteSearchResult[];
     openCodeSearchResult?(targetId: string, id: string): void;
 };
@@ -1157,7 +1160,8 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                 onWrite(variableId, value) {
                     props.writeVariable?.(targetId, variableId, value);
                     workspace?.refreshSurfaces();
-                }
+                },
+                onEdit: props.editVariable && (edit => props.editVariable!(targetId, edit))
             }) : props.getAssetPreview && React.createElement(AssetPreview, {
                 locale: props.locale, kind, selected, renderLayout, scrollTop, data: props.getAssetPreview(targetId, kind)
             }), element, id)));

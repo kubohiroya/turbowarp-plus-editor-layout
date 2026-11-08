@@ -163,6 +163,40 @@
     font-weight: normal;
 }
 
+.tw-sprite-variables__cloud {
+    color: #2399c2;
+}
+
+.tw-sprite-variables__editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin-block: .5rem;
+}
+
+.tw-sprite-variables__editor .tw-sprite-variables__input {
+    inline-size: min(100%, 20rem);
+}
+
+.tw-sprite-variables__editor [role="alert"] {
+    flex-basis: 100%;
+    margin: 0;
+}
+
+.tw-sprite-variables__button {
+    padding: .3rem .55rem;
+    border: 1px solid var(--ui-black-transparent, #ccd5e2);
+    border-radius: .25rem;
+    color: inherit;
+    background: var(--input-background, #fff);
+    font: inherit;
+}
+
+.tw-sprite-variables__button:disabled {
+    opacity: .55;
+}
+
 .tw-sprite-variables__input {
     box-sizing: border-box;
     inline-size: 100%;
