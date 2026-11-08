@@ -134,6 +134,8 @@ export function createStageSurface(React: typeof import('react'), {
             onOpenChange,
             focusPanelRef: launcher ? focusDrawer : undefined,
             focusBoundary: launcher?.mount,
+            // The menu bar launcher replaces the edge handle.
+            showTrigger: !launcher,
             portalContent: Boolean(placement),
             holdOpenSelector: '[data-turbowarp-app-shell-source-chooser][role="dialog"][aria-modal="true"]'
         }, inline) : inline;
