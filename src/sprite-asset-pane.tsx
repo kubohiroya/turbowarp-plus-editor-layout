@@ -292,6 +292,20 @@ const TrashIcon = () => <svg {...iconProps} className="tw-sprite-variables__icon
 </svg>;
 const CloseIcon = () => <svg {...iconProps} className="tw-sprite-variables__icon"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>;
 
+let nextDialogId = 0;
+
+/**
+ * IDs for one dialog's title and input. React's own ID hook arrived in React 18, but the package
+ * supports React 16.14 (see peerDependencies), and the Editor mounts this pane in the GUI's React 16.
+ */
+function useDialogIds() {
+    const [ids] = React.useState(() => {
+        const id = 'tw-sprite-variables-dialog-' + ++nextDialogId;
+        return {titleId: id + '-title', inputId: id + '-input'};
+    });
+    return ids;
+}
+
 /** A modal shaped like Scratch's “New Variable” prompt, shown in the top layer above every pane. */
 function VariableDialog({action, labels, targetName, error, onSubmit, onClose}: {
     action: SpriteVariableEdit;
@@ -302,8 +316,7 @@ function VariableDialog({action, labels, targetName, error, onSubmit, onClose}: 
     onClose(): void;
 }) {
     const dialog = React.useRef<HTMLDialogElement>(null);
-    const titleId = React.useId();
-    const inputId = React.useId();
+    const {titleId, inputId} = useDialogIds();
     const isDelete = action.type === 'delete';
     React.useLayoutEffect(() => {
         const node = dialog.current;
