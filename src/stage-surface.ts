@@ -2,6 +2,9 @@ import type {Context, ElementType} from 'react';
 import {createPortal} from 'react-dom';
 import type {useDockviewStage} from './dockview-stage.ts';
 import {createDockview, themeLight} from 'dockview';
+import {StageLauncher, type StageDockAction, type StageLauncherOptions} from './stage-launcher.ts';
+
+export type {StageDockAction, StageLauncherOptions} from './stage-launcher.ts';
 
 interface StageWindowConnection<Target> {
     ready: Promise<Target>;
@@ -80,17 +83,35 @@ export function stageDockActionLabel(locale: string, {drawer, detached, external
     return japanese ? 'アンドック' : 'Undock stage';
 }
 
-type StagePlacement = Pick<NonNullable<ReturnType<typeof useDockviewStage>>, 'surface' | 'inlineRef' | 'docked'>;
+type StagePlacement = Pick<NonNullable<ReturnType<typeof useDockviewStage>>, 'surface' | 'inlineRef' | 'docked'> &
+    Partial<Pick<NonNullable<ReturnType<typeof useDockviewStage>>, 'commands'>>;
 
 export function createStageSurface(React: typeof import('react'), {
     context, EdgeDrawer, Panel
 }: {
-    context: Context<{locale: string; stageDrawer?: boolean; setStageDrawerOpen?: (open: boolean) => void}>;
+    context: Context<{
+        locale: string;
+        stageDrawer?: boolean;
+        stageHidden?: boolean;
+        setStageDrawerOpen?(open: boolean): void;
+        setStageVisible?(visible: boolean): void;
+    }>;
     EdgeDrawer: ElementType;
     Panel: ElementType;
 }) {
-    return function StageSurface({externalHost, onDockActionChange, placement, ...props}: {placement?: StagePlacement; [key: string]: any}) {
-        const {locale, stageDrawer, setStageDrawerOpen} = React.useContext(context);
+    return function StageSurface({externalHost, onDockActionChange, placement, dockAction, launcher, ...props}: {
+        placement?: StagePlacement;
+        dockAction?: StageDockAction;
+        launcher?: StageLauncherOptions;
+        [key: string]: any;
+    }) {
+        const {locale, stageDrawer, stageHidden, setStageDrawerOpen, setStageVisible} = React.useContext(context);
+        const [drawerOpen, setDrawerOpen] = React.useState(false);
+        const focusDrawer = React.useRef<() => void>(null);
+        const onOpenChange = React.useCallback((open: boolean) => {
+            setStageDrawerOpen?.(open);
+            setDrawerOpen(open);
+        }, [setStageDrawerOpen]);
         const japanese = isJapanese(locale);
         const title = japanese ? 'ステージ' : 'Stage';
         const host = React.useMemo(() => stageDrawer && externalHost ?
@@ -110,10 +131,20 @@ export function createStageSurface(React: typeof import('react'), {
         const dock = stageDrawer ? React.createElement(EdgeDrawer, {
             edge: 'right',
             label: japanese ? 'ステージを展開' : 'Reveal stage',
-            onOpenChange: setStageDrawerOpen,
+            onOpenChange,
+            focusPanelRef: launcher ? focusDrawer : undefined,
+            focusBoundary: launcher?.mount,
             portalContent: Boolean(placement),
             holdOpenSelector: '[data-turbowarp-app-shell-source-chooser][role="dialog"][aria-modal="true"]'
         }, inline) : inline;
-        return placement ? React.createElement(React.Fragment, null, dock, createPortal(panel, placement.surface)) : dock;
+        const launcherView = stageDrawer && launcher ? createPortal(React.createElement(StageLauncher, {
+            locale, options: launcher, dockAction,
+            tab: placement?.commands ? {docked: placement.docked, commands: placement.commands} : undefined,
+            drawerOpen: drawerOpen && !stageHidden,
+            focusDrawer: () => focusDrawer.current?.(),
+            revealStage: () => {if (stageHidden) setStageVisible?.(true);}
+        }), launcher.mount) : null;
+        return React.createElement(React.Fragment, null, dock,
+            placement && createPortal(panel, placement.surface), launcherView);
     };
 }

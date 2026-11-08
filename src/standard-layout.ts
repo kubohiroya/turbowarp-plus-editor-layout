@@ -151,7 +151,8 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             Container ? element(Container, {locale: props.locale}, layout) : layout);
     }
 
-    function EdgeDrawer({edge, label, pinned = false, onOpenChange, portalContent = false, holdOpenSelector = '', children}) {
+    function EdgeDrawer({edge, label, pinned = false, onOpenChange, portalContent = false, holdOpenSelector = '',
+        focusPanelRef = undefined, focusBoundary = undefined, children}) {
         const [hovered, setHovered] = useState(false);
         const [engaged, setEngaged] = useState(false);
         const [heldOpen, setHeldOpen] = useState(false);
@@ -189,8 +190,27 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (panel.current.contains(event.target as Node)) setEngaged(true);
         };
         const blur = (event: FocusEvent) => {
-            if (!drawer.current.contains(event.relatedTarget as Node)) setEngaged(false);
+            const target = event.relatedTarget as Node;
+            if (!drawer.current.contains(target) && !focusBoundary?.contains(target)) setEngaged(false);
         };
+
+        const focusPanel = () => {
+            setEngaged(true);
+            const frame = trigger.current.ownerDocument.defaultView;
+            frame.requestAnimationFrame(() => {
+                if (panel.current && !panel.current.hidden) panel.current.focus({preventScroll: true});
+            });
+        };
+        useLayoutEffect(() => {
+            if (!focusPanelRef) return;
+            focusPanelRef.current = focusPanel;
+            return () => {focusPanelRef.current = null;};
+        }, [focusPanelRef]);
+        useLayoutEffect(() => {
+            if (!focusBoundary) return;
+            focusBoundary.addEventListener('focusout', blur);
+            return () => focusBoundary.removeEventListener('focusout', blur);
+        }, [focusBoundary]);
 
         useLayoutEffect(() => {
             if (!portalContent) return;
@@ -206,7 +226,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                 node.removeEventListener('focusin', focus);
                 node.removeEventListener('focusout', blur);
             };
-        }, [portalContent]);
+        }, [portalContent, focusBoundary]);
 
         return element('div', {
             className: styles.edgeDrawer,
@@ -229,13 +249,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             'aria-label': label,
             'aria-expanded': open,
             ref: trigger,
-            onClick: () => {
-                setEngaged(true);
-                const frame = trigger.current.ownerDocument.defaultView;
-                frame.requestAnimationFrame(() => {
-                    if (panel.current && !panel.current.hidden) panel.current.focus({preventScroll: true});
-                });
-            }
+            onClick: focusPanel
         }, {left: '›', right: '‹', bottom: '⌃'}[edge]),
         element('div', {className: styles.edgePanel, ref: panel, tabIndex: -1, hidden: !open}, children));
     }
