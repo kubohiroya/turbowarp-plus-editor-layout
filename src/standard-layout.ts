@@ -152,7 +152,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     }
 
     function EdgeDrawer({edge, label, pinned = false, onOpenChange, portalContent = false, holdOpenSelector = '',
-        focusPanelRef = undefined, focusBoundary = undefined, children}) {
+        focusPanelRef = undefined, focusBoundary = undefined, showTrigger = true, children}) {
         const [hovered, setHovered] = useState(false);
         const [engaged, setEngaged] = useState(false);
         const [heldOpen, setHeldOpen] = useState(false);
@@ -196,7 +196,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
 
         const focusPanel = () => {
             setEngaged(true);
-            const frame = trigger.current.ownerDocument.defaultView;
+            const frame = drawer.current.ownerDocument.defaultView;
             frame.requestAnimationFrame(() => {
                 if (panel.current && !panel.current.hidden) panel.current.focus({preventScroll: true});
             });
@@ -238,11 +238,12 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                 if (event.key !== 'Escape' || pinned || heldOpen || !open || event.defaultPrevented) return;
                 setHovered(false);
                 setEngaged(false);
-                trigger.current.focus();
+                // Without its own trigger, the drawer returns focus to the control that opened it.
+                (trigger.current ?? focusBoundary?.querySelector('button'))?.focus();
                 event.stopPropagation();
             }
         },
-        element('button', {
+        showTrigger && element('button', {
             type: 'button',
             className: styles.edgeTrigger,
             hidden: pinned,
