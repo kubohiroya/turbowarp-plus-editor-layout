@@ -517,7 +517,12 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                     element: slot.assetPreview});
                 continue;
             }
-            if (active === view) continue;
+            if (active === view) {
+                // The active view shows its native editor here; a variables or messages pane left
+                // visible from the previous section would sit above it and push it out of view.
+                if (slot.assetPreview) slot.assetPreview.hidden = true;
+                continue;
+            }
             const kind = view.section === 1 ? 'costumes' : view.section === 2 ? 'sounds' : undefined;
             if (kind && slot.assetPreview) {
                 clearInactive(slot);
