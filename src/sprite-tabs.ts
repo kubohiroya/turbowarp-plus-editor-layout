@@ -10,7 +10,7 @@ import type {SpritePropertiesPanelProps} from './sprite-properties.tsx';
 import {SpriteEditorToolbar, spriteEditorSections} from './sprite-editor-toolbar.tsx';
 import type {SpriteSearchResult} from './sprite-editor-toolbar.tsx';
 import type {DockviewStagePane} from './dockview-stage.ts';
-import {getDocumentWorkspace} from './document-workspace.ts';
+import {documentPanelTitle, getDocumentWorkspace} from './document-workspace.ts';
 import type {DocumentPanelRequest} from './document-workspace.ts';
 import {readWorkspaceLayout, workspaceWithoutTransientPanels} from './workspace-layout.ts';
 import type {PanelReference, WorkspaceLayout} from './workspace-layout.ts';
@@ -141,8 +141,6 @@ export type SpriteSplitDirection = 'right' | 'below';
 
 const stagePanelId = 'tw-plus-stage-display';
 const documentComponent = 'tw-plus-document';
-const documentTitle = ({filename, reference: {providerId, documentId}}: DocumentPanelRequest) =>
-    `${filename} (${providerId} / ${documentId})`;
 
 interface TabOptions<Snapshot = unknown> {
     vm: Project;
@@ -652,7 +650,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         do {
             id = 'document-view-' + ++nextView;
         } while (views.has(id) || documents.has(id) || vm.runtime.targets.some(target => target.id === id));
-        const title = documentTitle(request);
+        const title = documentPanelTitle(request);
         documents.set(id, {request});
         try {
             dockview.addPanel({id, title, component: documentComponent, renderer: 'always'});
@@ -819,7 +817,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                     return;
                 }
                 resolvedDocuments.set(id, request);
-                panels[id] = {id, title: documentTitle(request), contentComponent: documentComponent, renderer: 'always'};
+                panels[id] = {id, title: documentPanelTitle(request), contentComponent: documentComponent, renderer: 'always'};
             }
         }
         finishRestore();
