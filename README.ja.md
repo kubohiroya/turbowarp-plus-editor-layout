@@ -34,7 +34,7 @@ Editor のルートから、`site/source.json` の GUI を `npm run build:pages`
 
 `sprite-properties` は設定フォーム、一覧のスタイル、選択が変わった場合の編集拒否と VM への更新を担当する。ホストは選択中の値、VM、従来フォームと表示先を渡す。
 
-設定フォームは以前のスプライト設定ソース `80825f7`、ウィンドウ部品は以前の配布アーカイブのソース `b0390c3` から移設した。Scratch GUI の本家実装はこのパッケージに取り込まず、パッケージの既存ライセンスは GPL-3.0-or-later とする。
+設定フォームは以前のスプライト設定ソース `80825f7`、ウィンドウ部品は以前の配布アーカイブのソース `b0390c3` から移設した。Scratch GUI の本家実装はこのパッケージに取り込んでいないため、GPL のコードを含まず、GPL のモジュールも import しない。ライセンスは MPL-2.0 とする。MPL-2.0 は GPL を二次ライセンスとして認めるので、GPL-3.0 の Editor に組み込んで配信できる。ソースに「Incompatible With Secondary Licenses」の表示は付けない。付けると Editor に組み込めなくなる。
 
 ## Editor と組み合わせたローカル検証
 
@@ -43,6 +43,11 @@ Editor のルートから、`site/source.json` の GUI を `npm run build:pages`
 `npm run test:browser` を実行すると、既存のタブ列・編集パネル接続で Dockview を検証する。
 ファイルメニューの任意接続を備えた GUI を確認する場合は、同じコマンドに
 `TW_PLUS_LAYOUT_FILE_MENU_URL` を指定する。
+
+npm への公開は `.github/workflows/release.yml` が行う。`main` への push で `package.json` の版が
+npm にまだ無いときだけ、テストを通したうえで公開する。すでにある版では何もしない。認証はトークン
+ではなく npm の Trusted Publisher（OIDC）で、`id-token: write` の権限を使う。npm 側の設定には
+このワークフローのファイル名をそのまま登録するため、改名するときは npm の設定も合わせる。
 
 Plus 標準配置ではスプライト編集タブを既定で表示する。`twPlusDockviewSpriteTabs=0` で従来の編集表示に戻る。
 Editor がファイルメニューの接続口を提供している場合は、各項目のアイコンと「機能拡張の追加」を表示する。

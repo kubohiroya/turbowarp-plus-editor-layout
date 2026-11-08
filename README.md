@@ -37,11 +37,17 @@ From the Editor root, build the GUI pinned in `site/source.json` with `npm run b
 
 `sprite-properties` provides the properties form and list styles, rejects stale edits when the selected sprite changes, and applies updates to the VM. The host provides the selected values, the VM, the fallback form, and the mount point.
 
-The properties form came from the previous sprite properties source at `80825f7`, and the window components came from the source of the previous release archive at `b0390c3`. The extraction kept the upstream Scratch GUI implementation in its original repository. Its existing license is GPL-3.0-or-later.
+The properties form came from the previous sprite properties source at `80825f7`, and the window components came from the source of the previous release archive at `b0390c3`. The extraction kept the upstream Scratch GUI implementation in its original repository, so this package carries no GPL code and imports no GPL module. It is licensed MPL-2.0, which the GPL-3.0 Editor can still bundle because MPL-2.0 treats the GPL as a Secondary License. The source files carry no “Incompatible With Secondary Licenses” notice, and must not: that notice would make the package unusable in the Editor.
 
 ## Local verification with the Editor
 
 Run `npm test` to check tab state, file menu actions, and the existing layout. Set `TW_PLUS_LAYOUT_EDITOR_URL` to an Editor URL built with the pinned Scratch GUI and run `npm run test:browser` to verify Dockview through the existing tab strip and editor panel integration. Set `TW_PLUS_LAYOUT_FILE_MENU_URL` for the same command to check a GUI build with the optional file menu integration.
+
+`.github/workflows/release.yml` publishes to npm. On a push to `main` it publishes only when the
+version in `package.json` is not on npm yet, and only after the tests pass; an existing version
+publishes nothing. It authenticates with npm's trusted publisher (OIDC) through the `id-token: write`
+permission instead of a token, so npm's configuration records this workflow's filename: rename the
+file and the npm setting has to follow.
 
 Sprite editing tabs are enabled by default in the Plus standard layout. Set `twPlusDockviewSpriteTabs=0` to restore the previous editing view. When the Editor exposes the file menu integration, the menu shows item icons and the Add Extension command. Set `twPlusExtensionFileMenu=0` to use the button at the bottom left again. Reload the editor after changing startup parameters.
 
