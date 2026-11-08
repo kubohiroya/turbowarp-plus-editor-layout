@@ -819,3 +819,78 @@ details.layout-menu button {
     min-inline-size: 0;
     min-block-size: 0;
 }
+
+.stageLauncher {
+    --tw-plus-icon-menu-layer: 20;
+    display: flex;
+    align-items: stretch;
+    white-space: nowrap;
+    color: var(--text-primary, #25324a);
+    margin-inline: 0.25rem;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px #0002;
+}
+
+.stageLauncherAction,
+.stageLauncherMenu > button,
+.stageFullscreenPrompt {
+    min-block-size: 2rem;
+    font: inherit;
+    cursor: pointer;
+}
+
+.stageLauncherAction,
+.stageLauncherMenu > button {
+    padding-inline: 8px;
+    background: var(--looks-secondary, #ff4c4c);
+    border: 1px solid var(--looks-secondary-dark, #b64e4e);
+    color: #fff;
+}
+
+.stageLauncherAction {
+    padding-inline-start: 16px;
+    border-start-start-radius: 1rem;
+    border-end-start-radius: 1rem;
+}
+
+.stageLauncherAction:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.stageLauncherMenu > button {
+    inline-size: 1.75rem;
+    block-size: 100%;
+    border-inline-start: 0;
+    border-start-end-radius: 1rem;
+    border-end-end-radius: 1rem;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+}
+
+.stageLauncherMenu > button > span {
+    block-size: auto;
+}
+
+.stageFullscreenPrompt {
+    position: fixed;
+    z-index: 2;
+    inset-block-start: 0.5rem;
+    inset-inline-end: 0.5rem;
+    padding-inline: 0.75rem;
+    background: var(--ui-white, #fff);
+    border: 1px solid var(--ui-black-transparent, #d7dbe6);
+    border-radius: 1rem;
+    color: inherit;
+}
+
+.stageLauncherAction:focus-visible,
+.stageLauncherMenu > button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -3px;
+}
+
+.stageFullscreenPrompt:focus-visible {
+    outline: 2px solid var(--looks-secondary, #4c97ff);
+    outline-offset: -2px;
+}
