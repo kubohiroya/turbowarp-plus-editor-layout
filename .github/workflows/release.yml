@@ -1,7 +1,7 @@
 # npm の Trusted Publisher（OIDC）で公開する。トークンは使わない。
 # npm 側の設定にはこのファイル名をそのまま登録する必要があるため、改名するときは
 # npm の Trusted Publisher の設定も同じ名前に直す。
-name: Publish
+name: Release
 
 on:
   push:
