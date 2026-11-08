@@ -37,7 +37,10 @@
     grid-area: sections;
     display: flex;
     flex-direction: column;
-    padding: 6px;
+    gap: 2px;
+    /* The selected bar sits against the panel edge, so the rail keeps no padding there. */
+    padding-block: 6px;
+    padding-inline: 0 6px;
     overflow-y: auto;
     scrollbar-width: thin;
     background: var(--tw-plus-toolbar-background);
@@ -54,25 +57,58 @@
     font: inherit;
 }
 
+/* The rail holds the buttons; it does not divide its height among them. A button is the size
+   of what it shows, so the rail looks the same in a short split pane and in a tall one, and
+   adding a section does not reshape the others. The label is carried by the tooltip. */
 .tw-plus-sprite-toolbar-sections button {
+    position: relative;
     display: inline-flex;
-    flex: 1 0 0px;
+    flex: none;
     align-items: center;
     justify-content: center;
-    min-width: 24px;
-    min-height: 44px;
-    margin-block: 4px;
+    inline-size: var(--tw-plus-toolbar-height);
+    block-size: var(--tw-plus-toolbar-height);
+    min-height: 0;
+    margin-inline-start: 3px;
     padding: 0;
-    background: light-dark(#f4f4f4, #303030);
+    border-color: transparent;
+    border-radius: 7px;
+    background: none;
     color: light-dark(#595959, #bdbdbd);
     cursor: pointer;
 }
 
 .tw-plus-sprite-toolbar-sections button:hover { background: light-dark(#ededed, #3a3a3a); }
+
+/* The selection is an indicator, not a filled slab: a bar on the panel edge and a tinted icon. */
 .tw-plus-sprite-toolbar-sections button[aria-selected="true"] {
-    border-color: var(--looks-secondary-dark, #6747a8);
-    background: var(--looks-secondary-dark, #6747a8);
-    color: #fff;
+    border-color: transparent;
+    background: none;
+    color: var(--looks-secondary, #855cd6);
+}
+
+.tw-plus-sprite-toolbar-sections button[aria-selected="true"]::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: -3px;
+    inset-block: 3px;
+    inline-size: 2px;
+    border-radius: 0 2px 2px 0;
+    background: var(--looks-secondary, #855cd6);
+}
+
+/* The sections that edit the project are kept apart from the ones that survey the sprite. */
+.tw-plus-sprite-toolbar-sections button[data-section-group="native"] + button[data-section-group="own"] {
+    margin-block-start: 9px;
+}
+
+.tw-plus-sprite-toolbar-sections button[data-section-group="native"] + button[data-section-group="own"]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 1px 3px;
+    inset-block-start: -6px;
+    block-size: 1px;
+    background: var(--ui-black-transparent, #d5dbe3);
 }
 
 .tw-plus-sprite-toolbar-sections button:focus-visible,
