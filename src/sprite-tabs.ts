@@ -238,7 +238,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const stagePane = multiView ? options.stagePane : undefined;
     const usesNativeSection = (section: number) => section !== variableSection || !options.variables;
     const document = root.ownerDocument;
-    const editLabel = /^ja(?:-|$)/i.test(locale) ? 'クリックしてこのビューで編集' : 'Activate this view to edit';
+    const japanese = /^ja(?:-|$)/i.test(locale);
+    const editLabel = japanese ? 'クリックしてこのビューで編集' : 'Activate this view to edit';
+    const backdropTitle = japanese ? '背景' : 'Backdrops';
+    const tabTitle = (target: Target) => target.isStage ? backdropTitle : target.getName();
     const slots = new Map<string, TabSlot>();
     const views = new Map<string, View<Snapshot>>();
     const documents = new Map<string, {request: DocumentPanelRequest; session?: ReturnType<DocumentPanelRequest['mount']>}>();
@@ -583,7 +586,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         views.set(id, {id, target, section: section ?? remembered.get(target) ?? options.getSection(),
             assets: createAssetSelections(target, locale, source?.assets)});
         try {
-            return dockview.addPanel({id, title: target.getName(), component: 'sprite', inactive: !splitPosition,
+            return dockview.addPanel({id, title: tabTitle(target), component: 'sprite', inactive: !splitPosition,
                 position: splitPosition, params: {icon: getIcon(target)}});
         } catch (error) {
             views.delete(id);
@@ -779,7 +782,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                 const target = targets.find(item => item.isStage === reference.stage && targetName(item) === reference.name);
                 if (!target || id === stagePanelId || (reference.section === variableSection && !options.variables)) return finishRestore();
                 resolvedSprites.set(id, {id, target, section: reference.section, assets: createAssetSelections(target, locale)});
-                panels[id] = {id, title: target.getName(), contentComponent: 'sprite', params: {icon: getIcon(target)}};
+                panels[id] = {id, title: tabTitle(target), contentComponent: 'sprite', params: {icon: getIcon(target)}};
             } else if (reference.kind === 'stage') {
                 if (!stagePane || id !== stagePanelId) return finishRestore();
                 panels[id] = {id, title: stagePane.title, contentComponent: stagePanelId, renderer: 'always'};
@@ -837,7 +840,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             for (const [id, view] of views) {
                 represented.add(view.target);
                 const panel = dockview.getPanel(id);
-                if (panel && panel.title !== view.target.getName()) panel.api.setTitle(view.target.getName());
+                const title = tabTitle(view.target);
+                if (panel && panel.title !== title) panel.api.setTitle(title);
                 const icon = getIcon(view.target);
                 if (panel && panel.api.getParameters().icon !== icon) panel.api.updateParameters({icon});
             }
