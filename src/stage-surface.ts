@@ -31,19 +31,34 @@ export function createStagePopoutHost<Request, Target extends {mount: HTMLElemen
 
             let dockview: ReturnType<typeof createDockview> | undefined;
             let removed: {dispose(): void} | undefined;
+            let resized: {disconnect(): void} | undefined;
             let closed = false;
             const ready = connection.ready.then(target => {
                 if (closed || disconnected.signal.aborted) throw new Error('Stage window closed');
-                const content = target.mount.ownerDocument.createElement('div');
+                const {mount} = target;
+                const content = mount.ownerDocument.createElement('div');
                 Object.assign(content.style, {width: '100%', height: '100%'});
-                dockview = createDockview(target.mount, {
+                const view = createDockview(mount, {
                     createComponent: () => ({element: content, init() {}}),
                     theme: themeLight,
                     disableDnd: true,
-                    disableFloatingGroups: true
+                    disableFloatingGroups: true,
+                    // Dockview's own observer belongs to the editor window and does not see this one resize.
+                    disableAutoResizing: true
                 });
-                dockview.addPanel({id: 'stage', component: 'stage', title});
-                removed = dockview.onDidRemovePanel(disconnect);
+                dockview = view;
+                view.addPanel({id: 'stage', component: 'stage', title});
+                removed = view.onDidRemovePanel(disconnect);
+                const layout = () => {
+                    if (mount.clientWidth > 0 && mount.clientHeight > 0) view.layout(mount.clientWidth, mount.clientHeight);
+                };
+                const Observer = mount.ownerDocument.defaultView?.ResizeObserver;
+                if (Observer) {
+                    const observer = new Observer(layout);
+                    observer.observe(mount);
+                    resized = observer;
+                }
+                layout();
                 return {...target, mount: content};
             });
 
@@ -55,6 +70,7 @@ export function createStagePopoutHost<Request, Target extends {mount: HTMLElemen
                     closed = true;
                     connection.disconnected.removeEventListener('abort', disconnect);
                     try {
+                        resized?.disconnect();
                         removed?.dispose();
                         dockview?.dispose();
                     } finally {
