@@ -3,7 +3,7 @@
   "version": "0.1.30",
   "description": "Resizable panes and layout for TurboWarp Plus Editor",
   "type": "module",
-  "license": "GPL-3.0-or-later",
+  "license": "MPL-2.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
