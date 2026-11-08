@@ -1,9 +1,14 @@
 export interface DocumentPanelRequest {
     reference: {providerId: string; documentId: string};
     filename: string;
+    /** What the tab shows. Without it the tab names the file and where it comes from. */
+    title?: string;
     transient?: boolean;
     mount(element: HTMLElement, close: () => void): {requestClose(): void; dispose(): void};
 }
+
+export const documentPanelTitle = ({title, filename, reference: {providerId, documentId}}: DocumentPanelRequest) =>
+    title || `${filename} (${providerId} / ${documentId})`;
 
 interface DocumentPanelSource {
     getPanelRequest(reference: DocumentPanelRequest['reference']): DocumentPanelRequest | undefined;
