@@ -43,6 +43,12 @@ The properties form came from the previous sprite properties source at `80825f7`
 
 Run `npm test` to check tab state, file menu actions, and the existing layout. Set `TW_PLUS_LAYOUT_EDITOR_URL` to an Editor URL built with the pinned Scratch GUI and run `npm run test:browser` to verify Dockview through the existing tab strip and editor panel integration. Set `TW_PLUS_LAYOUT_FILE_MENU_URL` for the same command to check a GUI build with the optional file menu integration.
 
+`.github/workflows/publish.yml` publishes to npm. On a push to `main` it publishes only when the
+version in `package.json` is not on npm yet, and only after the tests pass; an existing version
+publishes nothing. It authenticates with npm's trusted publisher (OIDC) through the `id-token: write`
+permission instead of a token, so npm's configuration records this workflow's filename: rename the
+file and the npm setting has to follow.
+
 Sprite editing tabs are enabled by default in the Plus standard layout. Set `twPlusDockviewSpriteTabs=0` to restore the previous editing view. When the Editor exposes the file menu integration, the menu shows item icons and the Add Extension command. Set `twPlusExtensionFileMenu=0` to use the button at the bottom left again. Reload the editor after changing startup parameters.
 
 In the Plus web editor, add `twPlusDockview=1` to enable split sprite panes. Each pane remembers its section, costume and sound selections, and asset-list scroll position. Variable values are shared across panes and can be changed in the active pane. Remove the startup parameter and reload to return to the regular sprite tabs.

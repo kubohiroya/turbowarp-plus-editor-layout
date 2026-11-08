@@ -44,6 +44,11 @@ Editor のルートから、`site/source.json` の GUI を `npm run build:pages`
 ファイルメニューの任意接続を備えた GUI を確認する場合は、同じコマンドに
 `TW_PLUS_LAYOUT_FILE_MENU_URL` を指定する。
 
+npm への公開は `.github/workflows/publish.yml` が行う。`main` への push で `package.json` の版が
+npm にまだ無いときだけ、テストを通したうえで公開する。すでにある版では何もしない。認証はトークン
+ではなく npm の Trusted Publisher（OIDC）で、`id-token: write` の権限を使う。npm 側の設定には
+このワークフローのファイル名をそのまま登録するため、改名するときは npm の設定も合わせる。
+
 Plus 標準配置ではスプライト編集タブを既定で表示する。`twPlusDockviewSpriteTabs=0` で従来の編集表示に戻る。
 Editor がファイルメニューの接続口を提供している場合は、各項目のアイコンと「機能拡張の追加」を表示する。
 `twPlusExtensionFileMenu=0` で左下のボタンに戻る。起動時のパラメーターを変更したら再読み込みする。
