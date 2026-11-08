@@ -94,6 +94,39 @@ test('sprite tabs reuse the native editor, preserve its selected section, and fo
     assert.equal(vm.listenerCount('targetsUpdate'), 0);
 });
 
+test('the backdrop tab uses the editor locale and sprite tabs keep their names', t => {
+    const document = setupDom(t);
+    const root = document.querySelector('main');
+    const content = document.createElement('div');
+    const stage = {id: 'stage', isOriginal: true, isStage: true, getName: () => 'Stage'};
+    const sprite = {id: 'sprite', isOriginal: true, isStage: false, getName: () => 'Stage'};
+    const vm = Object.assign(new EventEmitter(), {
+        runtime: {targets: [stage, sprite]},
+        editingTarget: sprite,
+        setEditingTarget(id: string) {
+            this.editingTarget = this.runtime.targets.find(target => target.id === id);
+            this.emit('targetsUpdate');
+        }
+    });
+    for (const [locale, title] of [['ja-JP', '背景'], ['en', 'Backdrops']]) {
+        vm.editingTarget = sprite;
+        const controller = mountSpriteTabs(root, content, {
+            vm, locale, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen'
+        });
+        try {
+            const titles = () => [...root.querySelectorAll('.dv-default-tab-content')].map(tab => tab.textContent);
+            assert.deepEqual(titles(), ['Stage']);
+            controller.select(stage.id);
+            assert.equal(vm.editingTarget, stage);
+            assert.deepEqual(titles(), ['Stage', title]);
+            vm.emit('targetsUpdate');
+            assert.deepEqual(titles(), ['Stage', title]);
+        } finally {
+            controller.dispose();
+        }
+    }
+});
+
 test('split views of one sprite preserve their own editor state and release it when closed', t => {
     const document = setupDom(t);
     const icon = {encodeDataURI: () => '/sprite.svg'};

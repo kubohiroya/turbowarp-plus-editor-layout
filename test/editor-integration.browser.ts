@@ -148,17 +148,13 @@ test('the pinned GUI uses its existing editor slots for Dockview sprite tabs',
         await page.getByText('ダンゴ', {exact: true}).first().click();
         await expect(firstTab).toBeVisible();
 
-        const stageName = await page.evaluate(() => {
-            const stage = window.vm.runtime.getTargetForStage();
-            window.vm.setEditingTarget(stage.id);
-            return stage.getName();
-        });
+        await page.locator('[data-backdrop-placement]').getByRole('button', {name: '背景', exact: true}).click();
         const backdrops = editor.getByRole('tab', {name: '背景', exact: true});
         await backdrops.hover();
         await expect(editor.locator('.tw-plus-sprite-toolbar-tooltip')).toHaveText('背景');
         await backdrops.click();
         await expect(backdrops).toHaveAttribute('aria-selected', 'true');
-        await dockviewTabs.getByText(stageName, {exact: true}).click({button: 'right'});
+        await dockviewTabs.getByText('背景', {exact: true}).click({button: 'right'});
         await expect(rename).toHaveCount(0);
     });
 
