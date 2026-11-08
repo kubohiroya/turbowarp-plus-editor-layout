@@ -601,11 +601,16 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             } while (views.has(id) || documents.has(id) || vm.runtime.targets.some(item => item.id === id));
         }
         const source = splitPosition && views.get(splitPosition.referencePanel);
+        // An inactive panel leaves dockview without an active group, and dockview then opens each later
+        // panel in a new group; keep sprites added without a split as tabs of an existing sprite group.
+        const spriteGroup = !splitPosition && !dockview.activeGroup &&
+            dockview.groups.find(group => group.panels.some(panel => views.has(panel.id)));
         views.set(id, {id, target, section: section ?? remembered.get(target) ?? options.getSection(),
             assets: createAssetSelections(target, locale, source?.assets)});
         try {
             return dockview.addPanel({id, title: tabTitle(target), component: 'sprite', inactive: !splitPosition,
-                position: splitPosition, params: {icon: getIcon(target)}});
+                position: splitPosition ?? (spriteGroup ? {referenceGroup: spriteGroup} : undefined),
+                params: {icon: getIcon(target)}});
         } catch (error) {
             views.delete(id);
             throw error;
