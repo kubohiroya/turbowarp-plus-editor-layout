@@ -2,6 +2,7 @@ import React from 'react';
 import {observeTileNameTitles} from './native-tile-title.ts';
 import {SpritePropertiesPanel, type SpritePropertiesPanelProps} from './sprite-properties.tsx';
 import type {SpriteAssetKind, SpriteAssetPreviewItem} from './sprite-tabs.ts';
+import {cloudVariablePrefix, type SpriteVariableEdit, type SpriteVariableEditError} from './sprite-variable-edit.ts';
 
 interface NativeAssetPanelProps {
     children?: React.ReactNode;
@@ -126,6 +127,7 @@ export interface SpriteVariable {
     name: string;
     value: string | number;
     scope?: 'local' | 'global';
+    isCloud?: boolean;
 }
 
 interface PaneProps {
@@ -150,23 +152,32 @@ export interface SpriteVariablePaneProps extends PaneProps {
     targetId?: string;
     onWriteProperties?: SpritePropertiesPanelProps['onChange'];
     onWrite(id: string, value: SpriteVariable['value']): void;
+    onEdit?(edit: SpriteVariableEdit): SpriteVariableEditError | void;
 }
 
 export type SpriteAssetPaneProps = SpriteMediaPaneProps | SpriteVariablePaneProps;
 
 const english = {
     costumes: 'Costumes', sounds: 'Sounds', variables: 'Variables', name: 'Name', value: 'Value',
-    local: 'Sprite', global: 'Project', emptyCostumes: 'No costumes', emptySounds: 'No sounds',
+    local: 'Sprite', global: 'Project', cloudVariable: 'Cloud variable', emptyCostumes: 'No costumes', emptySounds: 'No sounds',
     emptyVariables: 'No variables', selectCostume: 'Select a costume', selectSound: 'Select a sound',
     imageUnavailable: 'Image unavailable', waveformUnavailable: 'Waveform unavailable', waveform: 'Waveform',
-    seconds: 's'
+    seconds: 's', actions: 'Actions', create: 'Create variable', rename: 'Rename', delete: 'Delete', cancel: 'Cancel',
+    deletePrompt: 'Delete variable “%1”?', emptyName: 'Enter a variable name.',
+    duplicateName: 'A variable with this name is already in scope.',
+    inUse: 'This variable is used by a block. Remove its uses before deleting it.',
+    unavailable: 'This variable or target is no longer available.'
 };
 const japanese: typeof english = {
     costumes: 'コスチューム', sounds: '音', variables: '変数', name: '名前', value: '値',
-    local: 'スプライト', global: '作品', emptyCostumes: 'コスチュームがありません', emptySounds: '音がありません',
+    local: 'スプライト', global: '作品', cloudVariable: 'クラウド変数', emptyCostumes: 'コスチュームがありません', emptySounds: '音がありません',
     emptyVariables: '変数がありません', selectCostume: 'コスチュームを選択してください', selectSound: '音を選択してください',
     imageUnavailable: '画像を表示できません', waveformUnavailable: '波形を表示できません', waveform: '波形',
-    seconds: '秒'
+    seconds: '秒', actions: '操作', create: '変数を作る', rename: '名前を変更', delete: '削除', cancel: 'キャンセル',
+    deletePrompt: '変数「%1」を削除しますか？', emptyName: '変数名を入力してください。',
+    duplicateName: '同じ名前の変数がすでにあります。',
+    inUse: 'この変数はブロックで使用中です。削除するには、先に参照を外してください。',
+    unavailable: 'この変数または編集対象を操作できなくなりました。'
 };
 const labelsFor = (locale: string) => /^ja(?:-|$)/i.test(locale) ? japanese : english;
 
@@ -262,19 +273,69 @@ function VariableField({variable, editable, onWrite}: {
         }} />;
 }
 
-function VariablePane({variables, editable, onWrite, locale, properties, targetId, onWriteProperties}: SpriteVariablePaneProps) {
+const variableName = (variable: SpriteVariable) => variable.isCloud && variable.name.startsWith(cloudVariablePrefix) ?
+    variable.name.slice(cloudVariablePrefix.length) : variable.name;
+
+function VariablePane({variables, editable, onWrite, onEdit, locale, properties, targetId, onWriteProperties}: SpriteVariablePaneProps) {
     const labels = labelsFor(locale);
+    const [action, setAction] = React.useState<SpriteVariableEdit | null>(null);
+    const [error, setError] = React.useState<SpriteVariableEditError | undefined>();
+    const start = (next: SpriteVariableEdit | null) => {
+        setError(undefined);
+        setAction(next);
+    };
+    React.useLayoutEffect(() => {
+        if (!editable) start(null);
+    }, [editable]);
+    const submit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!onEdit || !editable || !action) return;
+        const result = onEdit(action.type === 'delete' ? action :
+            {...action, name: String(new FormData(event.currentTarget).get('name') ?? '')});
+        if (result) setError(result);
+        else start(null);
+    };
+    const selected = action && action.type !== 'create' ? variables.find(variable => variable.id === action.id) : undefined;
     return <section className="tw-sprite-variables" aria-label={labels.variables}>
         {properties && targetId && onWriteProperties &&
             <SpritePropertiesPanel targetId={targetId} values={properties} locale={locale}
                 disabled={!editable} onChange={onWriteProperties} />}
+        {onEdit && <button type="button" className="tw-sprite-variables__button" disabled={!editable || action?.type === 'create'}
+            onClick={() => start({type: 'create', name: ''})}>{labels.create}</button>}
+        {editable && action && <form key={action.type === 'create' ? 'create' : action.type + action.id}
+            className="tw-sprite-variables__editor" aria-label={labels[action.type]} onSubmit={submit} onKeyDown={event => {
+                if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                event.stopPropagation();
+                start(null);
+            }}>
+            {action.type === 'delete' ?
+                <span>{labels.deletePrompt.replace('%1', selected ? variableName(selected) : '')}</span> :
+                <input className="tw-sprite-variables__input" name="name" aria-label={labels.name} defaultValue={action.name} autoFocus />}
+            <button type="submit" className="tw-sprite-variables__button">{labels[action.type]}</button>
+            <button type="button" className="tw-sprite-variables__button"
+                autoFocus={action.type === 'delete'} onClick={() => start(null)}>{labels.cancel}</button>
+            {error && <p role="alert">{labels[error]}</p>}
+        </form>}
         {variables.length ? <table className="tw-sprite-variables__table">
-            <thead><tr><th scope="col">{labels.name}</th><th scope="col">{labels.value}</th></tr></thead>
+            <thead><tr><th scope="col">{labels.name}</th><th scope="col">{labels.value}</th>
+                {onEdit && <th scope="col">{labels.actions}</th>}
+            </tr></thead>
             <tbody>{variables.map(variable => <tr key={variable.id}>
-                <th scope="row">{variable.name}
+                <th scope="row">
+                    {variable.isCloud && <>
+                        <span className="tw-sprite-variables__cloud" role="img" aria-label={labels.cloudVariable}>☁︎</span>{' '}
+                    </>}
+                    {variableName(variable)}
                     {variable.scope && <span className="tw-sprite-variables__scope">{labels[variable.scope]}</span>}
                 </th>
                 <td><VariableField variable={variable} editable={editable} onWrite={onWrite} /></td>
+                {onEdit && <td>
+                    <button type="button" className="tw-sprite-variables__button" disabled={!editable}
+                        onClick={() => start({type: 'rename', id: variable.id, name: variableName(variable)})}>{labels.rename}</button>{' '}
+                    <button type="button" className="tw-sprite-variables__button" disabled={!editable}
+                        onClick={() => start({type: 'delete', id: variable.id})}>{labels.delete}</button>
+                </td>}
             </tr>)}</tbody>
         </table> : <p>{labels.emptyVariables}</p>}
     </section>;

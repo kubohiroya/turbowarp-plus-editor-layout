@@ -64,6 +64,7 @@ test('assets keep selection and dimensions while inactive; variables retain and 
     const page = await browser.newPage({viewport: {width: 640, height: 480}});
     const routes = new Map([
         ['/sprite-asset-pane.js', new URL('../dist/sprite-asset-pane.js', import.meta.url)],
+        ['/sprite-variable-edit.js', new URL('../dist/sprite-variable-edit.js', import.meta.url)],
         ['/native-tile-title.js', new URL('../dist/native-tile-title.js', import.meta.url)],
         ['/sprite-properties.js', new URL('../dist/sprite-properties.js', import.meta.url)],
         ['/sprite-asset-pane.css', new URL('../src/sprite-asset-pane.css', import.meta.url)],
