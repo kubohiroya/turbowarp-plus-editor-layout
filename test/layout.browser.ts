@@ -121,8 +121,7 @@ test('the sprite toolbar selects one section and searches in the active section'
         await expect(tab).toHaveText('');
         await expect(tab).toHaveCSS('margin-top', `${buttonMargin}px`);
         await expect(tab).toHaveCSS('margin-bottom', `${buttonMargin}px`);
-        await expect(tab).toHaveCSS('padding-top', '13px');
-        await expect(tab).toHaveCSS('padding-bottom', '13px');
+        await expect(tab).toHaveCSS('padding', '0px');
         return tab.boundingBox();
     }));
     const panel = await page.getByRole('tabpanel').boundingBox();
@@ -134,7 +133,7 @@ test('the sprite toolbar selects one section and searches in the active section'
     }, buttonMargin);
     assert.ok(tabBounds.every((tab, index) => {
         const previous = tabBounds[index - 1];
-        return tab.height > tab.width && Math.abs(tab.height - share) < 1 && tab.x + tab.width <= panel.x &&
+        return tab.width === 24 && tab.height > tab.width && Math.abs(tab.height - share) < 1 && tab.x + tab.width <= panel.x &&
             tab.x === tabBounds[0].x && (!previous || Math.abs(tab.y - previous.y - previous.height - 2 * buttonMargin) < 0.1);
     }));
     await selected.hover();

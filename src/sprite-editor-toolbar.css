@@ -59,10 +59,10 @@
     flex: 1 0 0px;
     align-items: center;
     justify-content: center;
-    min-width: 44px;
+    min-width: 24px;
     min-height: 44px;
     margin-block: 4px;
-    padding: 13px 8px;
+    padding: 0;
     background: light-dark(#f4f4f4, #303030);
     color: light-dark(#595959, #bdbdbd);
     cursor: pointer;
