@@ -209,6 +209,13 @@
     background: var(--ui-secondary);
 }
 
+/* A stage that fills a Dockview tab or a separate window is the panel's content, not a window inside it. */
+.stage-viewport[data-floating="true"] > .stage-frame:not([data-fullscreen]) {
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+}
+
 .stage-frame:not([data-fullscreen]) > .stage-header > * {
     position: static;
 }

@@ -61,6 +61,65 @@ test('mounts in the child document and disconnects when the Dockview tab closes'
     assert.equal(mount.querySelector('.dv-tab'), null);
 });
 
+test('lays Dockview out from the child window when that window resizes', async t => {
+    const opener = new JSDOM('', {pretendToBeVisual: true});
+    const child = new JSDOM('<main></main>', {pretendToBeVisual: true});
+    // The editor window's observer never reports here, as it does not see the child window resize.
+    const globals = {
+        window: opener.window,
+        document: opener.window.document,
+        Node: opener.window.Node,
+        ResizeObserver: class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        }
+    };
+    Object.assign(globalThis, globals);
+    const observed: {targets: Element[]; callback(): void; disconnected: boolean}[] = [];
+    Object.assign(child.window, {ResizeObserver: class {
+        entry: typeof observed[number];
+        constructor(callback: () => void) {
+            this.entry = {targets: [], callback, disconnected: false};
+            observed.push(this.entry);
+        }
+        observe(target: Element) { this.entry.targets.push(target); }
+        unobserve() {}
+        disconnect() { this.entry.disconnected = true; }
+    }});
+    const mount = child.window.document.querySelector('main')!;
+    const size = {width: 680, height: 520};
+    Object.defineProperty(mount, 'clientWidth', {get: () => size.width});
+    Object.defineProperty(mount, 'clientHeight', {get: () => size.height});
+    const host = createStagePopoutHost({
+        open: () => ({ready: Promise.resolve({mount}), disconnected: new AbortController().signal, close() {}})
+    }, title);
+    const connection = host.open({})!;
+    t.after(() => {
+        try {
+            connection.close();
+        } finally {
+            child.window.close();
+            opener.window.close();
+            for (const key of Object.keys(globals)) Reflect.deleteProperty(globalThis, key);
+        }
+    });
+    await connection.ready;
+    const group = () => mount.querySelector<HTMLElement>('.dv-grid-view')!;
+    assert.equal(observed.length, 1);
+    assert.deepEqual(observed[0].targets, [mount]);
+    assert.equal(group().style.width, '680px');
+
+    size.width = 1024;
+    size.height = 768;
+    observed[0].callback();
+    assert.equal(group().style.width, '1024px');
+    assert.equal(group().style.height, '768px');
+
+    connection.close();
+    assert.equal(observed[0].disconnected, true);
+});
+
 test('handles a child window closing before its mount is ready', async () => {
     const child = new JSDOM('<main></main>');
     try {
