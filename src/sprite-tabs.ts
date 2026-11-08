@@ -15,6 +15,9 @@ import type {DocumentPanelRequest} from './document-workspace.ts';
 import {readWorkspaceLayout, workspaceWithoutTransientPanels} from './workspace-layout.ts';
 import type {PanelReference, WorkspaceLayout} from './workspace-layout.ts';
 import type {SpriteVariableEdit, SpriteVariableEditError} from './sprite-variable-edit.ts';
+import {SpriteMessagePane} from './sprite-message-pane.tsx';
+import type {MessageRenameError} from './sprite-message-pane.tsx';
+import type {MessageUse, ProjectMessage, TargetMessages} from './project-messages.ts';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
 export {editSpriteVariable} from './sprite-variable-edit.ts';
@@ -84,6 +87,9 @@ export interface SpriteAssetPreviewItem {
 }
 
 const variableSection = spriteEditorSections.indexOf('variables');
+const messageSection = spriteEditorSections.indexOf('messages');
+// The first three sections are the GUI's own panels; the rest are rendered by this package.
+const lastNativeSection = 2;
 
 export interface SpriteAssetPreviewData {
     items: readonly SpriteAssetPreviewItem[];
@@ -154,6 +160,7 @@ interface TabOptions<Snapshot = unknown> {
     };
     stagePane?: DockviewStagePane;
     variables?: boolean;
+    messages?: boolean;
     locale?: string;
     viewAdapter?: SpriteTabAdapter<Snapshot>;
     popouts?: {url: string; className?: string; openPalette?(view: SpriteTabView): void};
@@ -176,7 +183,7 @@ interface ToolbarSlot {
 interface AssetPreviewSlot {
     id: string;
     targetId: string;
-    kind: AssetKind | 'variables';
+    kind: AssetKind | 'variables' | 'messages';
     editable: boolean;
     selected?: object;
     renderLayout?: SpriteAssetLayout;
@@ -238,7 +245,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const {vm, multiView = false, locale = 'en'} = options;
     const viewAdapter = multiView ? options.viewAdapter : undefined;
     const stagePane = multiView ? options.stagePane : undefined;
-    const usesNativeSection = (section: number) => section !== variableSection || !options.variables;
+    const ownSection = (section: number) => (section === variableSection && Boolean(options.variables)) ||
+        (section === messageSection && Boolean(options.messages));
+    const usesNativeSection = (section: number) => !ownSection(section);
+    const sectionAvailable = (section: number) => section <= lastNativeSection || ownSection(section);
     const document = root.ownerDocument;
     const japanese = /^ja(?:-|$)/i.test(locale);
     const editLabel = japanese ? 'クリックしてこのビューで編集' : 'Activate this view to edit';
@@ -500,9 +510,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                 toolbars.push({view: descriptor, element: slot.toolbar});
                 slot.body.setAttribute('aria-labelledby', id + '-section-' + (spriteEditorSections[view.section] ?? 'code'));
             }
-            if (view.section === variableSection && options.variables && slot.assetPreview) {
+            if (ownSection(view.section) && slot.assetPreview) {
                 slot.assetPreview.hidden = false;
-                assetPreviews.push({id, targetId: descriptor.targetId, kind: 'variables', editable: active === view,
+                assetPreviews.push({id, targetId: descriptor.targetId,
+                    kind: view.section === messageSection ? 'messages' : 'variables', editable: active === view,
                     element: slot.assetPreview});
                 continue;
             }
@@ -700,7 +711,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
 
     function setViewSection(id: string, section: number) {
         const view = views.get(id);
-        if (!view || !Number.isInteger(section) || section < 0 || section > (options.variables ? variableSection : 2) || view.section === section) return false;
+        if (!view || !Number.isInteger(section) || section < 0 || !sectionAvailable(section) ||
+            view.section === section) return false;
         if (view === active && viewAdapter) remember(view);
         view.section = section;
         if (view === active) {
@@ -782,7 +794,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         for (const [id, reference] of Object.entries(stored.panels)) {
             if (reference.kind === 'sprite') {
                 const target = targets.find(item => item.isStage === reference.stage && targetName(item) === reference.name);
-                if (!target || id === stagePanelId || (reference.section === variableSection && !options.variables)) return finishRestore();
+                if (!target || id === stagePanelId || !sectionAvailable(reference.section)) return finishRestore();
                 resolvedSprites.set(id, {id, target, section: reference.section, assets: createAssetSelections(target, locale)});
                 panels[id] = {id, title: tabTitle(target), contentComponent: 'sprite', params: {icon: getIcon(target)}};
             } else if (reference.kind === 'stage') {
@@ -970,6 +982,14 @@ type SpriteTabsProps<Snapshot> = Omit<TabOptions<Snapshot>, 'activateSection' | 
     writeProperties?: SpritePropertiesPanelProps['onChange'];
     writeVariable?(targetId: string, id: string, value: SpriteVariable['value']): void;
     editVariable?(targetId: string, edit: SpriteVariableEdit): SpriteVariableEditError | void;
+    /** What this target sends and receives. `scanTargetMessages` builds it from the runtime. */
+    getMessages?(targetId: string): TargetMessages;
+    /** Open the block that sends or receives a message. */
+    openMessage?(use: MessageUse): void;
+    /** Open a sprite or the stage picked in the stage's relationship diagram. */
+    openMessageTarget?(targetId: string): void;
+    /** Rename a message everywhere in the project. The stage owns broadcast_msg variables. */
+    renameMessage?(message: ProjectMessage, name: string): MessageRenameError | void;
     getCodeSearchItems?(targetId: string): readonly SpriteSearchResult[];
     openCodeSearchResult?(targetId: string, id: string): void;
 };
@@ -1026,8 +1046,9 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
     const [assetPreviewSlots, setAssetPreviewSlots] = React.useState<readonly AssetPreviewSlot[]>([]);
     const controller = React.useRef<SpriteTabsController<Snapshot>>(null);
     const hasVariables = Boolean(props.getVariables);
+    const hasMessages = Boolean(props.getMessages);
     const hasToolbar = Boolean(props.renderToolbar) || hasVariables;
-    const hasAssetPreview = Boolean(props.getAssetPreview) || hasVariables;
+    const hasAssetPreview = Boolean(props.getAssetPreview) || hasVariables || hasMessages;
     React.useLayoutEffect(() => {
         sections.current.append(...props.slots);
         parking.current.appendChild(content);
@@ -1074,6 +1095,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
             layoutStorage: props.layoutStorage,
             stagePane: props.stagePane,
             variables: hasVariables,
+            messages: hasMessages,
             locale: props.locale,
             viewAdapter: props.viewAdapter,
             popouts: props.popouts && {...props.popouts, className: props.className},
@@ -1092,7 +1114,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
         };
     }, [content, props.enabled, props.vm, props.reopenLabel, props.multiView, props.locale,
         props.viewAdapter, props.stagePane, props.layoutStorage, props.renameLabels, props.popouts, props.className,
-        hasVariables, hasToolbar, hasAssetPreview]);
+        hasVariables, hasMessages, hasToolbar, hasAssetPreview]);
     React.useLayoutEffect(() => {
         controller.current?.syncActiveSection(props.activeSection);
     }, [props.activeSection]);
@@ -1120,6 +1142,9 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                 React.createElement(SpriteEditorToolbar, {
                     viewId: view.id, locale: props.locale, section: currentSection, isStage: view.isStage,
                     activeGroup: view.groupActive, propertiesInVariables: Boolean(props.getProperties),
+                    // A section with no port behind it would open an empty panel.
+                    availableSections: spriteEditorSections.filter(section =>
+                        section !== 'messages' || Boolean(props.getMessages)),
                     actions: view.active && currentSection !== 'variables' ? props.activeTools : undefined,
                     onSectionChange: section => actions.setSection(spriteEditorSections.indexOf(section)),
                     search: {
@@ -1129,6 +1154,9 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                             if (section === 'code') items = props.getCodeSearchItems?.(view.targetId) ?? [];
                             else if (section === 'variables') {
                                 items = props.getVariables(view.targetId).map(variable => ({id: variable.id, label: variable.name}));
+                            } else if (section === 'messages') {
+                                items = (props.getMessages?.(view.targetId).messages ?? [])
+                                    .map(message => ({id: message.key, label: message.name}));
                             } else {
                                 items = props.getAssetPreview?.(view.targetId, section).items.map((item, index) =>
                                     ({id: String(index), label: item.name})) ?? [];
@@ -1143,13 +1171,26 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                                 const field = assetPreviewSlots.find(slot => slot.id === view.id)?.element;
                                 [...(field?.querySelectorAll<HTMLInputElement>('input[data-variable-id]') ?? [])]
                                     .find(input => input.dataset.variableId === result.id)?.focus();
+                            } else if (section === 'messages') {
+                                const pane = assetPreviewSlots.find(slot => slot.id === view.id)?.element;
+                                [...(pane?.querySelectorAll<HTMLElement>('[data-message-key]') ?? [])]
+                                    .find(node => node.dataset.messageKey === result.id)?.focus();
                             } else workspace?.selectAsset(view.id, section, Number(result.id));
                         }
                     }
                 }));
             return createPortal(toolbar, element, view.id);
         }), assetPreviewSlots.map(({id, targetId, kind, element, editable, selected, renderLayout, scrollTop}) =>
-            createPortal(kind === 'variables' ? React.createElement(SpriteAssetPane, {
+            createPortal(kind === 'messages' ? React.createElement(SpriteMessagePane, {
+                kind, locale: props.locale, editable, data: props.getMessages!(targetId),
+                onOpen: props.openMessage,
+                onOpenTarget: props.openMessageTarget,
+                onRename: props.renameMessage && ((message: ProjectMessage, name: string) => {
+                    const result = props.renameMessage!(message, name);
+                    if (!result) workspace?.refreshSurfaces();
+                    return result;
+                })
+            }) : kind === 'variables' ? React.createElement(SpriteAssetPane, {
                 kind, locale: props.locale, editable, variables: props.getVariables?.(targetId) ?? [],
                 properties: props.getProperties?.(targetId),
                 targetId,

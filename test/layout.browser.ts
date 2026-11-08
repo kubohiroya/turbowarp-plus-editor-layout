@@ -114,7 +114,7 @@ test('the sprite toolbar selects one section and searches in the active section'
     const unselected = page.getByRole('tab', {selected: false});
     const tabs = strip.getByRole('tab');
     await expect(strip).toHaveAttribute('aria-orientation', 'vertical');
-    await expect(tabs).toHaveCount(4);
+    await expect(tabs).toHaveCount(5);
     await expect(selected).toHaveAccessibleName('コード');
     const buttonMargin = 4;
     const tabBounds = await Promise.all((await tabs.all()).map(async tab => {
@@ -187,10 +187,10 @@ test('the sprite toolbar selects one section and searches in the active section'
 
     await page.locator('.tw-plus-sprite-tab-slot--split').evaluate(element => {element.style.height = '120px';});
     await selected.press('End');
-    await expect(selected).toHaveAccessibleName('Variables');
+    await expect(selected).toHaveAccessibleName('Messages');
     await expect(selected).toBeFocused();
     await expect(selected).toHaveCSS('height', '44px');
-    await expect(tooltip).toHaveText('Variables');
+    await expect(tooltip).toHaveText('Messages');
     assert.ok(await strip.evaluate(element => element.scrollTop > 0));
 });
 

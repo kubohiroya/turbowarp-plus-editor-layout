@@ -218,3 +218,49 @@ test('split views of one sprite preserve their own editor state and release it w
     }
     assert.equal(vm.listenerCount('targetsUpdate'), 0);
 });
+
+test('the message section is reachable only when the host renders it', t => {
+    const document = setupDom(t);
+    const sprite = {id: 'sprite', isOriginal: true, isStage: false, getName: () => 'Sprite',
+        getCurrentCostume: () => ({asset: {encodeDataURI: () => '/sprite.svg'}})};
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [sprite]}, editingTarget: sprite});
+    const root = document.querySelector('main');
+    let slots: {kind: string}[] = [];
+    const mount = (options: object) => mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {},
+        reopenLabel: 'Reopen', onAssetPreviewSlots: next => { slots = [...next]; }, ...options
+    });
+
+    const native = mount({});
+    try {
+        const {id} = native.currentView();
+        assert.equal(native.setViewSection(id, 3), false);
+        assert.equal(native.setViewSection(id, 4), false);
+        assert.equal(native.setViewSection(id, 2), true);
+    } finally {
+        native.dispose();
+    }
+
+    const both = mount({variables: true, messages: true});
+    try {
+        const {id} = both.currentView();
+        assert.equal(both.setViewSection(id, 3), true);
+        assert.deepEqual(slots.map(slot => slot.kind), ['variables']);
+        assert.equal(both.setViewSection(id, 4), true);
+        assert.deepEqual(slots.map(slot => slot.kind), ['messages']);
+        assert.equal(both.setViewSection(id, 5), false);
+        assert.equal(both.currentView().section, 4);
+    } finally {
+        both.dispose();
+    }
+
+    const messagesOnly = mount({messages: true});
+    try {
+        const {id} = messagesOnly.currentView();
+        assert.equal(messagesOnly.setViewSection(id, 3), false);
+        assert.equal(messagesOnly.setViewSection(id, 4), true);
+        assert.deepEqual(slots.map(slot => slot.kind), ['messages']);
+    } finally {
+        messagesOnly.dispose();
+    }
+});

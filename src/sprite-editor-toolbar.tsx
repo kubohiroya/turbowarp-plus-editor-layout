@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const spriteEditorSections = ['code', 'costumes', 'sounds', 'variables'] as const;
+export const spriteEditorSections = ['code', 'costumes', 'sounds', 'variables', 'messages'] as const;
 export type SpriteEditorSection = typeof spriteEditorSections[number];
 
 export interface SpriteSearchResult {
@@ -32,6 +32,7 @@ const glyphs: Record<SpriteEditorSection | 'search', string> = {
     costumes: 'm6 9 5.5-6.5a1.4 1.4 0 0 1 2 2L7.5 11m-2-2a2.5 2.5 0 0 0-3 2.5L2 14c2.7 0 5-1 5-3a2 2 0 0 0-1.5-2Z',
     sounds: 'M2 6h3l4-3v10l-4-3H2Zm9.5 0a3 3 0 0 1 0 4m2-6a5.5 5.5 0 0 1 0 8',
     variables: 'M5 2H3v12h2m6-12h2v12h-2M6 6l4 4m0-4-4 4',
+    messages: 'M2 4h12v8H2Zm0 0 6 4.5L14 4',
     search: 'M10 10l3 3M11 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z'
 };
 
@@ -99,8 +100,10 @@ export function SpriteEditorToolbar({viewId, locale, section, onSectionChange, i
     availableSections = spriteEditorSections, propertiesInVariables = false, actions}: SpriteEditorToolbarProps) {
     const [tooltip, setTooltip] = React.useState<{button: HTMLButtonElement; id: SpriteEditorSection; y: number}>();
     const japanese = /^ja(?:-|$)/i.test(locale);
-    const labels = japanese ? {code: 'コード', costumes: isStage ? '背景' : 'コスチューム', sounds: '音', variables: propertiesInVariables ? '変数など' : '変数'} :
-        {code: 'Code', costumes: isStage ? 'Backdrops' : 'Costumes', sounds: 'Sounds', variables: propertiesInVariables ? 'Properties & Variables' : 'Variables'};
+    const labels = japanese ? {code: 'コード', costumes: isStage ? '背景' : 'コスチューム', sounds: '音',
+        variables: propertiesInVariables ? '変数など' : '変数', messages: 'メッセージ'} :
+        {code: 'Code', costumes: isStage ? 'Backdrops' : 'Costumes', sounds: 'Sounds',
+            variables: propertiesInVariables ? 'Properties & Variables' : 'Variables', messages: 'Messages'};
 
     function showTooltip(button: HTMLButtonElement, id: SpriteEditorSection) {
         const tab = button.getBoundingClientRect();

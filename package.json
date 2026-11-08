@@ -23,6 +23,10 @@
       "types": "./dist/sprite-properties.d.ts",
       "default": "./dist/sprite-properties.js"
     },
+    "./project-messages": {
+      "types": "./dist/project-messages.d.ts",
+      "default": "./dist/project-messages.js"
+    },
     "./sprite-properties.css": "./src/sprite-properties.css",
     "./windows": {
       "types": "./dist/windows/index.d.ts",

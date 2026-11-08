@@ -46,3 +46,12 @@ Run `npm test` to check tab state, file menu actions, and the existing layout. S
 Sprite editing tabs are enabled by default in the Plus standard layout. Set `twPlusDockviewSpriteTabs=0` to restore the previous editing view. When the Editor exposes the file menu integration, the menu shows item icons and the Add Extension command. Set `twPlusExtensionFileMenu=0` to use the button at the bottom left again. Reload the editor after changing startup parameters.
 
 In the Plus web editor, add `twPlusDockview=1` to enable split sprite panes. Each pane remembers its section, costume and sound selections, and asset-list scroll position. Variable values are shared across panes and can be changed in the active pane. Remove the startup parameter and reload to return to the regular sprite tabs.
+
+The sprite and stage editor tabs carry a Messages section after Code, Costumes or Backdrops, Sounds and
+Variables. It lists, in a sent group and a received group, which message each block broadcasts and which
+message each hat waits for. Messages that are only sent, only received, or present in the project but
+unused by this target are marked. The stage's Messages section also draws the whole project as sprite or
+stage, message, sprite or stage, keeping isolated messages in the picture. A message can be renamed from
+the list and from the diagram; the stage owns `broadcast_msg` variables, so a rename applies project-wide.
+`messageReference` in `./project-messages` is the only place that decides what sends or receives a message,
+and the editor's project search calls the same function.
