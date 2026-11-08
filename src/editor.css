@@ -820,13 +820,46 @@ details.layout-menu button {
     min-block-size: 0;
 }
 
+/*
+ * The GUI's page wrapper never narrows past 1024px, so below that the window shows the left part of
+ * every row and nothing scrolls: the menu bar's trailing items, the stage launcher among them, stand
+ * outside the window with no way to reach them. Holding the bar to the window instead lets the row's
+ * own items give up width — the project title first, which is already growable — so every item stays
+ * reachable. At 1024px and above the bar is the window's width anyway and nothing here applies.
+ */
+:global([class*="menu-bar_menu-bar_"]) {
+    min-inline-size: 0;
+    max-inline-size: 100vw;
+}
+
+/*
+ * The host mounts the launcher in its menu bar through a slot it keeps across re-renders. Both the
+ * slot and the element it is mounted in are taken out of layout, so the launcher itself is the row's
+ * flex item: that is the box the row centres and sizes, and neither reaches it through two plain
+ * `div`s. Without this the launcher stands at the top of the bar instead of on the row's own line.
+ */
+.stageLauncherSlot {
+    display: contents;
+}
+
+/*
+ * The row's items sit on a centred line of their own height (the GUI's `.menu-bar-item`, the stage
+ * controls group beside this one), so the launcher is centred too, and it holds at the trailing edge
+ * the 0.5rem the project icon holds at the leading one. It also gives width back rather than taking
+ * it: `min-inline-size: 0` lifts the automatic minimum that `nowrap` text imposes on a flex item, so
+ * a label longer than the row can afford is clipped to an ellipsis instead of pushing the pair out
+ * of the row. The accessible name stays the whole label, so the clipping is visual only.
+ */
 .stageLauncher {
     --tw-plus-icon-menu-layer: 20;
+    box-sizing: border-box;
+    align-self: center;
     display: flex;
     align-items: stretch;
+    min-inline-size: 0;
     white-space: nowrap;
     color: var(--text-primary, #25324a);
-    margin-inline: 0.25rem;
+    margin-inline: 0.25rem 0.5rem;
     border-radius: 1rem;
     box-shadow: 0 1px 3px #0002;
 }
@@ -848,6 +881,11 @@ details.layout-menu button {
 }
 
 .stageLauncherAction {
+    flex: 0 1 auto;
+    /* Enough room for the first characters and the ellipsis once the row takes the rest back. */
+    min-inline-size: 3rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding-inline-start: 16px;
     border-start-start-radius: 1rem;
     border-end-start-radius: 1rem;
@@ -856,6 +894,10 @@ details.layout-menu button {
 .stageLauncherAction:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+.stageLauncherMenu {
+    flex: none;
 }
 
 .stageLauncherMenu > button {
