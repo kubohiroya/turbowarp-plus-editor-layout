@@ -94,6 +94,36 @@ test('sprite tabs reuse the native editor, preserve its selected section, and fo
     assert.equal(vm.listenerCount('targetsUpdate'), 0);
 });
 
+test('a project with many sprites opens them as tabs in one group, not as split columns', t => {
+    const document = setupDom(t);
+    const sprite = (id: string) => ({id, isOriginal: true, isStage: false, getName: () => id});
+    const stage = {id: 'stage', isOriginal: true, isStage: true, getName: () => 'Stage'};
+    const sprites = ['a', 'b', 'c', 'd'].map(sprite);
+    const vm = Object.assign(new EventEmitter(), {
+        runtime: {targets: [stage, ...sprites]},
+        editingTarget: sprites[2],
+        setEditingTarget(id: string) {
+            this.editingTarget = this.runtime.targets.find(target => target.id === id);
+            this.emit('targetsUpdate');
+        }
+    });
+    const root = document.querySelector('main');
+    const controller = mountSpriteTabs(root, document.createElement('div'), {vm, getSection: () => 0,
+        activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen'});
+    try {
+        const groups = () => [...root.querySelectorAll('.dv-groupview')]
+            .map(group => [...group.querySelectorAll('.dv-default-tab-content')].map(tab => tab.textContent));
+        assert.deepEqual(groups(), [['a', 'b', 'c', 'd']]);
+        assert.equal(root.querySelector('.dv-tab.dv-active-tab .dv-default-tab-content')?.textContent, 'c');
+
+        vm.runtime.targets.push(sprite('e'));
+        vm.emit('targetsUpdate');
+        assert.deepEqual(groups(), [['a', 'b', 'c', 'd', 'e']]);
+    } finally {
+        controller.dispose();
+    }
+});
+
 test('the backdrop tab uses the editor locale and sprite tabs keep their names', t => {
     const document = setupDom(t);
     const root = document.querySelector('main');
