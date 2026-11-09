@@ -1,0 +1,125 @@
+/*
+ * The editor add-on's debugger in the editor's theme.
+ *
+ * The add-on's own sheet paints the debugger a fixed teal that matches nothing else in the editor.
+ * These rules use the GUI's theme variables instead, so the debugger follows the light and dark
+ * themes and the selected accent like the editor's other dialogs. The add-on injects its sheet
+ * after the editor's, so every rule starts with `html body` to outrank its selectors.
+ */
+
+/* The floating card: a dialog like the editor's other modals. */
+html body .sa-debugger-interface {
+    border: 1px solid var(--ui-black-transparent);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 35%);
+    background-color: var(--ui-modal-background);
+    color: var(--ui-modal-foreground);
+}
+
+html body .sa-debugger-interface [class*="card_header-buttons_"] {
+    background-color: var(--ui-modal-header-background);
+    border-color: var(--ui-black-transparent);
+    color: var(--ui-modal-header-foreground);
+}
+
+html body .sa-debugger-tabs {
+    gap: 0.375rem;
+    padding-block: 0.375rem;
+}
+
+html body .sa-debugger-tabs li {
+    padding: 0.375rem 0.75rem;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    color: inherit;
+    font-weight: 600;
+}
+
+html body .sa-debugger-tabs li:hover {
+    background-color: var(--ui-black-transparent);
+}
+
+html body .sa-debugger-tabs li.sa-debugger-tab-selected {
+    background-color: var(--ui-modal-background);
+    border-color: var(--ui-black-transparent);
+    color: var(--looks-secondary);
+}
+
+html body .sa-debugger-footer {
+    border-top-color: var(--ui-black-transparent);
+}
+
+html body .sa-debugger-footer-buttons [class*="card_shrink-expand-button"] {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    background-color: var(--looks-secondary);
+    color: #fff;
+}
+
+html body .sa-debugger-footer-buttons [class*="card_shrink-expand-button"]:hover {
+    background-color: var(--looks-secondary);
+    filter: brightness(1.1);
+}
+
+html body .sa-debugger-unpause-container:not(:last-child) {
+    border-right-color: var(--ui-black-transparent);
+}
+
+html body .sa-debugger-unpause {
+    animation-name: tw-plus-debugger-unpause-pulse;
+}
+
+@keyframes tw-plus-debugger-unpause-pulse {
+    0% {
+        box-shadow: 0 0 0 4px transparent;
+    }
+    100% {
+        box-shadow: 0 0 0 4px var(--looks-transparent);
+    }
+}
+
+html body .sa-debugger-log-repeats {
+    background-color: var(--looks-secondary);
+}
+
+/*
+ * The tab: part of the workspace rather than a dialog over it. It fills the panel, has no dialog
+ * frame, and its header becomes a toolbar in the workspace's colors. The panel's own tab closes it,
+ * so the add-on's close button would only repeat that.
+ */
+html body .sa-debugger-interface.tw-plus-debugger-docked {
+    position: static;
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 100%;
+    min-inline-size: 0;
+    min-block-size: 0;
+    resize: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    cursor: auto;
+}
+
+html body .tw-plus-debugger-docked [class*="card_header-buttons_"] {
+    background-color: var(--ui-secondary);
+    border-bottom: 1px solid var(--ui-black-transparent);
+    color: var(--text-primary);
+    cursor: auto;
+}
+
+html body .tw-plus-debugger-docked .sa-debugger-tabs li.sa-debugger-tab-selected {
+    background-color: var(--looks-light-transparent);
+    border-color: var(--looks-transparent);
+}
+
+/* The add-on whitens unselected icons for its colored header; on the toolbar they would vanish. */
+html body .tw-plus-debugger-docked .sa-debugger-tabs li:not(.sa-debugger-tab-selected) img {
+    filter: grayscale(1);
+    opacity: 0.75;
+}
+
+html body .tw-plus-debugger-docked [class*="modal_header-item-close"] {
+    display: none;
+}
