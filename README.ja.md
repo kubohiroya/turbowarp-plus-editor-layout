@@ -34,7 +34,7 @@ Editor のルートから、`site/source.json` の GUI を `npm run build:pages`
 
 `sprite-properties` は設定フォーム、一覧のスタイル、選択が変わった場合の編集拒否と VM への更新を担当する。ホストは選択中の値、VM、従来フォームと表示先を渡す。
 
-設定フォームは以前のスプライト設定ソース `80825f7`、ウィンドウ部品は以前の配布アーカイブのソース `b0390c3` から移設した。Scratch GUI の本家実装はこのパッケージに取り込んでいないため、GPL のコードを含まず、GPL のモジュールも import しない。ライセンスは MPL-2.0 とする。MPL-2.0 は GPL を二次ライセンスとして認めるので、GPL-3.0 の Editor に組み込んで配信できる。ソースに「Incompatible With Secondary Licenses」の表示は付けない。付けると Editor に組み込めなくなる。
+設定フォームは以前のスプライト設定ソース `80825f7` から移設した。以前の配布アーカイブのソース `b0390c3` から移設したウィンドウ部品は、`@kubohiroya/turbowarp-plus-editor-windows` に移った。Scratch GUI の本家実装はこのパッケージに取り込んでいないため、GPL のコードを含まず、GPL のモジュールも import しない。ライセンスは MPL-2.0 とする。MPL-2.0 は GPL を二次ライセンスとして認めるので、GPL-3.0 の Editor に組み込んで配信できる。ソースに「Incompatible With Secondary Licenses」の表示は付けない。付けると Editor に組み込めなくなる。
 
 ## デバッガーのタブ
 

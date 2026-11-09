@@ -37,7 +37,7 @@ From the Editor root, build the GUI pinned in `site/source.json` with `npm run b
 
 `sprite-properties` provides the properties form and list styles, rejects stale edits when the selected sprite changes, and applies updates to the VM. The host provides the selected values, the VM, the fallback form, and the mount point.
 
-The properties form came from the previous sprite properties source at `80825f7`, and the window components came from the source of the previous release archive at `b0390c3`. The extraction kept the upstream Scratch GUI implementation in its original repository, so this package carries no GPL code and imports no GPL module. It is licensed MPL-2.0, which the GPL-3.0 Editor can still bundle because MPL-2.0 treats the GPL as a Secondary License. The source files carry no “Incompatible With Secondary Licenses” notice, and must not: that notice would make the package unusable in the Editor.
+The properties form came from the previous sprite properties source at `80825f7`. The window components, which came from the source of the previous release archive at `b0390c3`, now live in `@kubohiroya/turbowarp-plus-editor-windows`. The extraction kept the upstream Scratch GUI implementation in its original repository, so this package carries no GPL code and imports no GPL module. It is licensed MPL-2.0, which the GPL-3.0 Editor can still bundle because MPL-2.0 treats the GPL as a Secondary License. The source files carry no “Incompatible With Secondary Licenses” notice, and must not: that notice would make the package unusable in the Editor.
 
 ## Debugger tab
 
