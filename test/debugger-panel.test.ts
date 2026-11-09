@@ -118,3 +118,19 @@ test('without a workspace that takes panels the debugger stays the floating wind
     debug.header.dispatchEvent(new window.Event('pointerdown', {bubbles: true}));
     assert.equal(debug.drags(), 1, 'the floating window still drags by its header');
 });
+
+// The docked toolbar continues the debugger's own tab, so it must share the selected tab's color
+// rather than the unselected tabs' (which, in the dark theme, made the panel look like another tab's).
+test('the docked debugger toolbar takes the selected tab color', async () => {
+    const {readFile} = await import('node:fs/promises');
+    const editor = await readFile(new URL('../src/editor.css', import.meta.url), 'utf8');
+    const panel = await readFile(new URL('../src/debugger-panel.css', import.meta.url), 'utf8');
+    const color = (source: string, pattern: RegExp) => source.match(pattern)?.[1]?.trim();
+    const selected = color(editor, /--dv-activegroup-visiblepanel-tab-background-color:\s*var\((--[\w-]+)/);
+    const unselected = color(editor, /--dv-activegroup-hiddenpanel-tab-background-color:\s*var\((--[\w-]+)/);
+    const toolbar = color(panel,
+        /\.tw-plus-debugger-docked \[class\*="card_header-buttons_"\] \{\s*background-color:\s*var\((--[\w-]+)/);
+    assert.ok(selected);
+    assert.equal(toolbar, selected);
+    assert.notEqual(toolbar, unselected);
+});
