@@ -102,8 +102,14 @@ html body .sa-debugger-interface.tw-plus-debugger-docked {
     cursor: auto;
 }
 
+/*
+ * The toolbar sits right under the debugger's own tab, so it takes the selected tab's color
+ * (`--dv-activegroup-visiblepanel-tab-background-color` in editor.css) and the two read as one.
+ * `--ui-secondary` is the unselected tabs' color, and in the dark theme it made the open debugger
+ * look as if it belonged to another tab.
+ */
 html body .tw-plus-debugger-docked [class*="card_header-buttons_"] {
-    background-color: var(--ui-secondary);
+    background-color: var(--ui-white);
     border-bottom: 1px solid var(--ui-black-transparent);
     color: var(--text-primary);
     cursor: auto;
