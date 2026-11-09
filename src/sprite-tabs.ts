@@ -12,8 +12,9 @@ import type {SpriteSearchResult} from './sprite-editor-toolbar.tsx';
 import type {DockviewStagePane} from './dockview-stage.ts';
 import {documentPanelTitle, getDocumentWorkspace} from './document-workspace.ts';
 import type {DocumentPanelRequest} from './document-workspace.ts';
-import {readWorkspaceLayout, workspaceWithoutTransientPanels} from './workspace-layout.ts';
-import type {PanelReference, WorkspaceLayout} from './workspace-layout.ts';
+import {dockPopoutGroups, positionOnScreen, readWorkspaceLayout, workspaceWithoutTransientPanels}
+    from './workspace-layout.ts';
+import type {PanelReference, SavedPopout, WorkspaceLayout} from './workspace-layout.ts';
 import type {SpriteVariableEdit, SpriteVariableEditError} from './sprite-variable-edit.ts';
 import {SpriteMessagePane} from './sprite-message-pane.tsx';
 import type {MessageRenameError} from './sprite-message-pane.tsx';
@@ -273,6 +274,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     let restoreTimeout: number | undefined;
     let saveFrame: number | undefined;
     const openingGroups = new Set<string>();
+    /** Panels that were in a separate window when the layout was saved, until the user reopens them. */
+    const reopenable = new Map<string, SavedPopout>();
     const originalTargets = () => vm.runtime.targets.filter(target => target.isOriginal);
 
     const dockview = createDockview(root, {
@@ -403,8 +406,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                     const panel = group.activePanel;
                     if (!panel || !canOpenPanel()) return;
                     openingGroups.add(group.id);
+                    const saved = reopenable.get(panel.id)?.position;
                     void dockview.addPopoutGroup(panel, {
                         popoutUrl: popouts.url,
+                        ...(saved && {position: positionOnScreen(saved, window.screen)}),
                         onDidOpen({window: child}) {
                             child.addEventListener('load', () => {
                                 const doc = child.document;
@@ -416,6 +421,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                             }, {once: true});
                         }
                     })
+                        .then(opened => { if (opened) reopenable.delete(panel.id); })
                         .finally(() => openingGroups.delete(group.id));
                 },
                 canOpenPalette: () => Boolean(codeView()),
@@ -746,10 +752,11 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     function writeLayout() {
         saveFrame = undefined;
         const targets = originalTargets();
-        if (!persistence || pendingRestore || syncing || !targets.length || persistence.isProjectLoading?.() ||
-            dockview.groups.some(group => group.api.location.type === 'popout')) return;
-        const {grid, activeGroup} = dockview.toJSON();
-        if (!activeGroup || grid.width <= 0 || grid.height <= 0) return;
+        if (!persistence || pendingRestore || syncing || !targets.length || persistence.isProjectLoading?.()) return;
+        const serialized = dockview.toJSON();
+        if (serialized.grid.width <= 0 || serialized.grid.height <= 0) return;
+        const docked = dockPopoutGroups(serialized.grid, serialized.activeGroup, serialized.popoutGroups);
+        if (!docked) return;
         const panels: Record<string, PanelReference> = Object.create(null);
         for (const [id, view] of views) {
             panels[id] = {kind: 'sprite', name: targetName(view.target), stage: view.target.isStage, section: view.section};
@@ -760,10 +767,17 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             if (request.transient) transient.add(id);
             else panels[id] = {kind: 'document', ...request.reference};
         }
-        const saved = workspaceWithoutTransientPanels(grid, activeGroup, transient, active?.id);
+        const saved = workspaceWithoutTransientPanels(docked.grid, docked.activeGroup, transient, active?.id);
         if (!saved) return;
+        // A window can close before the last save, for example when the page unloads, so each window is kept
+        // with its last position until the user opens that panel in a window again.
+        for (const popout of docked.popouts) for (const id of popout.panels) reopenable.set(id, popout);
+        const popouts = [...new Set(reopenable.values())]
+            .map(popout => ({...popout, panels: popout.panels.filter(id =>
+                reopenable.get(id) === popout && views.has(id) && panels[id]?.kind === 'sprite')}))
+            .filter(popout => popout.panels.length);
         const snapshot: WorkspaceLayout = {version: 1, project: projectSignature(targets), ...saved,
-            editingView: active?.id, panels};
+            editingView: active?.id, panels, ...(popouts.length && {popouts})};
         try { persistence.storage.setItem(persistence.key, JSON.stringify(snapshot)); } catch { /* Storage can be unavailable. */ }
     }
 
@@ -774,10 +788,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     }
 
     function flushLayout() {
-        if (saveFrame !== undefined) {
-            window.cancelAnimationFrame(saveFrame);
-            writeLayout();
-        }
+        const pending = saveFrame !== undefined;
+        if (pending) window.cancelAnimationFrame(saveFrame!);
+        // Moving or resizing a separate window does not change the docked layout, so record it on the way out.
+        if (pending || dockview.groups.some(group => group.api.location.type === 'popout')) writeLayout();
     }
 
     function finishRestore() {
@@ -790,6 +804,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         if (!pendingRestore || !persistence || persistence.isProjectLoading?.()) return;
         const targets = originalTargets();
         if (!targets.length || !vm.editingTarget) return;
+        reopenable.clear();
         let stored: WorkspaceLayout | undefined;
         try {
             const raw = persistence.storage.getItem(persistence.key);
@@ -830,6 +845,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             for (const [id, view] of resolvedSprites) views.set(id, view);
             for (const [id, request] of resolvedDocuments) documents.set(id, {request});
             dockview.fromJSON({grid: stored.grid, activeGroup: stored.activeGroup, panels});
+            for (const popout of stored.popouts ?? []) {
+                for (const id of popout.panels) if (views.has(id)) reopenable.set(id, popout);
+            }
             const selected = dockview.activePanel;
             show(views.has(selected?.id) ? selected : dockview.getPanel(stored.editingView) ?? selected);
         } catch {

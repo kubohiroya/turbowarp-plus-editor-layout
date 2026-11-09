@@ -9,6 +9,11 @@ export type PanelReference =
     | {kind: 'stage'}
     | ({kind: 'document'} & DocumentPanelRequest['reference']);
 
+export interface WindowPosition {left: number; top: number; width: number; height: number}
+
+/** Panels that were open in one separate window when the layout was saved. */
+export interface SavedPopout {panels: string[]; position?: WindowPosition}
+
 export interface WorkspaceLayout {
     version: 1;
     project: string;
@@ -16,6 +21,71 @@ export interface WorkspaceLayout {
     activeGroup: string;
     editingView?: string;
     panels: Record<string, PanelReference>;
+    /** Separate windows are restored docked; the user reopens each one. */
+    popouts?: SavedPopout[];
+}
+
+type Popout = NonNullable<SerializedDockview['popoutGroups']>[number];
+type GroupPanelViewState = Exclude<Node['data'], readonly unknown[]>;
+
+function leafViews(node: Node, output: GroupPanelViewState[] = []): GroupPanelViewState[] {
+    if (Array.isArray(node.data)) for (const child of node.data) leafViews(child, output);
+    else output.push(node.data);
+    return output;
+}
+
+/**
+ * Move the panels of every separate window back into the docked grid, next to the group they came from, and
+ * keep where each window was. Groups that Dockview hid or emptied when a panel moved out are shown again or
+ * removed, so the saved grid never depends on a window that has to open on load.
+ */
+export function dockPopoutGroups(grid: Grid, activeGroup: string | undefined, popoutGroups: readonly Popout[] = []):
+    {grid: Grid; activeGroup: string; popouts: SavedPopout[]} | undefined {
+    const copy = (node: Node): Node => Array.isArray(node.data) ?
+        {type: 'branch', size: node.size, data: node.data.map(copy)} :
+        {type: 'leaf', size: node.size, data: {...node.data, views: [...node.data.views]}};
+    const root = copy(grid.root);
+    const leaves = new Map(leafViews(root).map(data => [data.id, data]));
+    const firstFilled = () => [...leaves.values()].find(data => data.views.length) ?? leaves.values().next().value;
+    let active = activeGroup;
+    const popouts: SavedPopout[] = [];
+    for (const popout of popoutGroups) {
+        const groups = popout.data ? [popout.data] : popout.grid ? leafViews(popout.grid.root) : [];
+        const views = groups.flatMap(group => group.views);
+        if (!views.length) continue;
+        const target = leaves.get(popout.gridReferenceGroup!) ?? leaves.get(activeGroup!) ?? firstFilled();
+        if (!target) return;
+        const wasEmpty = !target.views.length;
+        for (const view of views) if (!target.views.includes(view)) target.views.push(view);
+        if (wasEmpty) target.activeView = groups[0].activeView ?? views[0];
+        if (groups.some(group => group.id === activeGroup)) active = target.id;
+        const position = popout.position;
+        popouts.push(position ? {panels: views, position: {left: position.left, top: position.top,
+            width: position.width, height: position.height}} : {panels: views});
+    }
+    const trim = (node: Node): Node | undefined => {
+        if (!Array.isArray(node.data)) return node.data.views.length ? node : undefined;
+        const data = node.data.flatMap(child => trim(child) ?? []);
+        return data.length ? {...node, data} : undefined;
+    };
+    const kept = trim(root);
+    if (!kept) return;
+    const remaining = new Set(leafViews(kept).map(data => data.id));
+    if (!active || !remaining.has(active)) active = leafViews(kept)[0].id;
+    return {grid: {...grid, root: Array.isArray(kept.data) ? kept : {type: 'branch', size: grid.width, data: [kept]}},
+        activeGroup: active, popouts};
+}
+
+/** Keep a reopened window on the current screen even if the monitors changed since it was saved. */
+export function positionOnScreen(position: WindowPosition, screen: {availLeft?: number; availTop?: number;
+    availWidth: number; availHeight: number}): WindowPosition {
+    const left0 = screen.availLeft ?? 0;
+    const top0 = screen.availTop ?? 0;
+    const width = Math.min(Math.max(position.width, 200), screen.availWidth);
+    const height = Math.min(Math.max(position.height, 150), screen.availHeight);
+    const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+    return {width, height, left: clamp(position.left, left0, left0 + screen.availWidth - width),
+        top: clamp(position.top, top0, top0 + screen.availHeight - height)};
 }
 
 export function workspaceWithoutTransientPanels(grid: Grid, activeGroup: string, transient: ReadonlySet<string>,
@@ -46,6 +116,8 @@ export function workspaceWithoutTransientPanels(grid: Grid, activeGroup: string,
 const limit = 256;
 const validId = (value: unknown): value is string =>
     typeof value === 'string' && value.length > 0 && value.length <= 1024;
+const coordinate = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 100000;
 const size = (value: unknown): value is number =>
     typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100000;
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -110,6 +182,33 @@ export function readWorkspaceLayout(raw: string, project: string): WorkspaceLayo
     }
     const editingView = input.editingView;
     if (editingView !== undefined && (!validId(editingView) || panels[editingView]?.kind !== 'sprite')) return;
+    const popouts = readPopouts(input.popouts, panels);
+    if (!popouts) return;
     return {version: 1, project, grid: {root, width, height, orientation}, activeGroup: input.activeGroup,
-        editingView: typeof editingView === 'string' ? editingView : undefined, panels};
+        editingView: typeof editingView === 'string' ? editingView : undefined, panels,
+        ...(popouts.length && {popouts})};
+}
+
+function readPopouts(input: unknown, panels: WorkspaceLayout['panels']): SavedPopout[] | undefined {
+    if (input === undefined) return [];
+    if (!Array.isArray(input) || input.length > limit) return;
+    const seen = new Set<string>();
+    const output: SavedPopout[] = [];
+    for (const item of input) {
+        if (!record(item) || !Array.isArray(item.panels) || !item.panels.length) return;
+        for (const id of item.panels) {
+            if (!validId(id) || seen.has(id) || panels[id]?.kind !== 'sprite') return;
+            seen.add(id);
+        }
+        const position = item.position;
+        if (position === undefined) {
+            output.push({panels: [...item.panels]});
+            continue;
+        }
+        if (!record(position) || !coordinate(position.left) || !coordinate(position.top) ||
+            !size(position.width) || !position.width || !size(position.height) || !position.height) return;
+        output.push({panels: [...item.panels], position: {left: position.left, top: position.top,
+            width: position.width, height: position.height}});
+    }
+    return output;
 }
