@@ -15,14 +15,14 @@ import type {DocumentPanelRequest} from './document-workspace.ts';
 import {dockPopoutGroups, positionOnScreen, readWorkspaceLayout, workspaceWithoutTransientPanels}
     from './workspace-layout.ts';
 import type {PanelReference, SavedPopout, WorkspaceLayout} from './workspace-layout.ts';
-import type {SpriteVariableEdit, SpriteVariableEditError} from './sprite-variable-edit.ts';
+import type {SpriteVariableEdit, SpriteVariableEditError} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 import {SpriteMessagePane} from './sprite-message-pane.tsx';
 import type {MessageRenameError} from './sprite-message-pane.tsx';
-import type {MessageUse, ProjectMessage, TargetMessages} from './project-messages.ts';
+import type {MessageUse, ProjectMessage, TargetMessages} from '@kubohiroya/turbowarp-plus-editor-project-model/project-messages';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
 export type {SpriteAssetKind, SpriteAssetPreviewItem} from './sprite-asset-pane.tsx';
-export {editSpriteVariable} from './sprite-variable-edit.ts';
+export {editSpriteVariable} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 
 export {useDockviewStage} from './dockview-stage.ts';
 

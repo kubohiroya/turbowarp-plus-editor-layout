@@ -67,4 +67,5 @@ Web 版の Plus 標準配置で `twPlusDockview=1` を付けて起動すると�
 メッセージも分かる。背景の「メッセージ」には、さらに「スプライトまたは背景」-「メッセージ」-
 「スプライトまたは背景」の作品全体の関係図を描く。孤立したメッセージも図に残る。
 メッセージ名は一覧と関係図から変更でき、`broadcast_msg` はステージ所有なので作品全体に及ぶ。
-送受信の判定は `./project-messages` の `messageReference` だけが持ち、Editor の作品内検索も同じ関数を使う。
+送受信の判定は `@kubohiroya/turbowarp-plus-editor-project-model` の `messageReference` だけが持ち、Editor の作品内検索も同じ関数を使う。
+このパッケージの `./project-messages` は、既存の import のためにそれを再 export している。
