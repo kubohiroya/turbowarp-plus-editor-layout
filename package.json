@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-plus-editor-layout",
-  "version": "0.1.39",
+  "version": "0.2.0",
   "description": "Resizable panes and layout for TurboWarp Plus Editor",
   "type": "module",
   "license": "MPL-2.0",
@@ -28,11 +28,6 @@
       "default": "./dist/project-messages.js"
     },
     "./sprite-properties.css": "./src/sprite-properties.css",
-    "./windows": {
-      "types": "./dist/windows/index.d.ts",
-      "default": "./dist/windows/index.js"
-    },
-    "./windows.css": "./src/windows/styles.css",
     "./sprite-tabs": {
       "types": "./dist/sprite-tabs.d.ts",
       "default": "./dist/sprite-tabs.js"
