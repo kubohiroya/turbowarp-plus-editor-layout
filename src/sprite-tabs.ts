@@ -769,12 +769,12 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         }
         const saved = workspaceWithoutTransientPanels(docked.grid, docked.activeGroup, transient, active?.id);
         if (!saved) return;
-        const open = new Set(docked.popouts.flatMap(popout => popout.panels));
-        const waiting = new Set<SavedPopout>();
-        for (const [id, popout] of reopenable) if (views.has(id) && !open.has(id)) waiting.add(popout);
-        const popouts = [...docked.popouts, ...[...waiting].map(popout => ({...popout,
-            panels: popout.panels.filter(id => reopenable.get(id) === popout && views.has(id) && !open.has(id))}))]
-            .map(popout => ({...popout, panels: popout.panels.filter(id => panels[id]?.kind === 'sprite')}))
+        // A window can close before the last save, for example when the page unloads, so each window is kept
+        // with its last position until the user opens that panel in a window again.
+        for (const popout of docked.popouts) for (const id of popout.panels) reopenable.set(id, popout);
+        const popouts = [...new Set(reopenable.values())]
+            .map(popout => ({...popout, panels: popout.panels.filter(id =>
+                reopenable.get(id) === popout && views.has(id) && panels[id]?.kind === 'sprite')}))
             .filter(popout => popout.panels.length);
         const snapshot: WorkspaceLayout = {version: 1, project: projectSignature(targets), ...saved,
             editingView: active?.id, panels, ...(popouts.length && {popouts})};
