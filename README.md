@@ -31,13 +31,11 @@ Run `npm test` to verify split sizing, aspect ratios, and settings persistence. 
 
 From the Editor root, build the GUI pinned in `site/source.json` with `npm run build:pages`, then run `E2E_GUI_ROOT=/absolute/gui-checkout E2E_PATH_PREFIX=/turbowarp-plus-editor/ node --test test/editor-layout.browser.ts`. To verify the GUI on its own, set `E2E_LAYOUT_BARE_BUILD` to the directory where the same GUI was built without the host integration.
 
-## Separate stage window and sprite properties
+## Separate stage window
 
 `attachStageInput` manages input subscriptions and cleanup using the separate window's document and canvas provided by the host. Pointer handling and drag cleanup use the host's callbacks.
 
-`sprite-properties` provides the properties form and list styles, rejects stale edits when the selected sprite changes, and applies updates to the VM. The host provides the selected values, the VM, the fallback form, and the mount point.
-
-The properties form came from the previous sprite properties source at `80825f7`. The window components, which came from the source of the previous release archive at `b0390c3`, now live in `@kubohiroya/turbowarp-plus-editor-windows`. The extraction kept the upstream Scratch GUI implementation in its original repository, so this package carries no GPL code and imports no GPL module. It is licensed MPL-2.0, which the GPL-3.0 Editor can still bundle because MPL-2.0 treats the GPL as a Secondary License. The source files carry no “Incompatible With Secondary Licenses” notice, and must not: that notice would make the package unusable in the Editor.
+The panes inside a sprite editing tab (assets and variables, messages, the properties form and the section toolbar) now live in `@kubohiroya/turbowarp-plus-editor-sprite-panes`; this package arranges them into tabs and splits. The window components, which came from the source of the previous release archive at `b0390c3`, now live in `@kubohiroya/turbowarp-plus-editor-windows`. The extraction kept the upstream Scratch GUI implementation in its original repository, so this package carries no GPL code and imports no GPL module. It is licensed MPL-2.0, which the GPL-3.0 Editor can still bundle because MPL-2.0 treats the GPL as a Secondary License. The source files carry no “Incompatible With Secondary Licenses” notice, and must not: that notice would make the package unusable in the Editor.
 
 ## Debugger tab
 
@@ -60,11 +58,7 @@ Sprite editing tabs are enabled by default in the Plus standard layout. Set `twP
 In the Plus web editor, add `twPlusDockview=1` to enable split sprite panes. Each pane remembers its section, costume and sound selections, and asset-list scroll position. Variable values are shared across panes and can be changed in the active pane. Remove the startup parameter and reload to return to the regular sprite tabs.
 
 The sprite and stage editor tabs carry a Messages section after Code, Costumes or Backdrops, Sounds and
-Variables. It lists, in a sent group and a received group, which message each block broadcasts and which
-message each hat waits for. Messages that are only sent, only received, or present in the project but
-unused by this target are marked. The stage's Messages section also draws the whole project as sprite or
-stage, message, sprite or stage, keeping isolated messages in the picture. A message can be renamed from
-the list and from the diagram; the stage owns `broadcast_msg` variables, so a rename applies project-wide.
-`messageReference` in `@kubohiroya/turbowarp-plus-editor-project-model` is the only place that decides what
+Variables, drawn by `SpriteMessagePane` from `@kubohiroya/turbowarp-plus-editor-sprite-panes`. The stage owns
+`broadcast_msg` variables, so a rename applies project-wide. `messageReference` in `@kubohiroya/turbowarp-plus-editor-project-model` is the only place that decides what
 sends or receives a message, and the editor's project search calls the same function. This package's
 `./project-messages` re-exports it for existing imports.

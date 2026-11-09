@@ -3,12 +3,12 @@ import {createPortal} from 'react-dom';
 import {createDockview, DefaultTab, themeLight} from 'dockview';
 import type {DockviewGroupPanel, GroupPanelPartInitParameters, IDockviewPanel, SerializedDockview} from 'dockview';
 import {createSpriteLayoutMenu} from './sprite-layout-menu.ts';
-import {NativeAssetPanel, SpriteAssetPane} from './sprite-asset-pane.tsx';
+import {NativeAssetPanel, SpriteAssetPane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 import type {NativeAssetPanelRenderer, NativeAssetSelector, SpriteAssetKind, SpriteAssetLayout, SpriteAssetPreviewItem,
-    SpriteVariable} from './sprite-asset-pane.tsx';
-import type {SpritePropertiesPanelProps} from './sprite-properties.tsx';
-import {SpriteEditorToolbar, spriteEditorSections} from './sprite-editor-toolbar.tsx';
-import type {SpriteSearchResult} from './sprite-editor-toolbar.tsx';
+    SpriteVariable} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
+import type {SpritePropertiesPanelProps} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-properties';
+import {SpriteEditorToolbar, spriteEditorSections} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-editor-toolbar';
+import type {SpriteSearchResult} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-editor-toolbar';
 import type {DockviewStagePane} from './dockview-stage.ts';
 import {documentPanelTitle, getDocumentWorkspace} from './document-workspace.ts';
 import type {DocumentPanelRequest} from './document-workspace.ts';
@@ -16,12 +16,12 @@ import {dockPopoutGroups, positionOnScreen, readWorkspaceLayout, workspaceWithou
     from './workspace-layout.ts';
 import type {PanelReference, SavedPopout, WorkspaceLayout} from './workspace-layout.ts';
 import type {SpriteVariableEdit, SpriteVariableEditError} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
-import {SpriteMessagePane} from './sprite-message-pane.tsx';
-import type {MessageRenameError} from './sprite-message-pane.tsx';
+import {SpriteMessagePane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
+import type {MessageRenameError} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
 import type {MessageUse, ProjectMessage, TargetMessages} from '@kubohiroya/turbowarp-plus-editor-project-model/project-messages';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
-export type {SpriteAssetKind, SpriteAssetPreviewItem} from './sprite-asset-pane.tsx';
+export type {SpriteAssetKind, SpriteAssetPreviewItem} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 export {editSpriteVariable} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 
 export {useDockviewStage} from './dockview-stage.ts';
