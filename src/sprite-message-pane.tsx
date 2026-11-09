@@ -1,8 +1,8 @@
 import React from 'react';
 import type {
     MessageGraph, MessageGraphNode, MessageRenameError, MessageStatus, MessageUse, ProjectMessage, TargetMessages
-} from './project-messages.ts';
-import {checkMessageRename, receiveOpcode} from './project-messages.ts';
+} from '@kubohiroya/turbowarp-plus-editor-project-model/project-messages';
+import {checkMessageRename, receiveOpcode} from '@kubohiroya/turbowarp-plus-editor-project-model/project-messages';
 
 export type {MessageRenameError};
 

@@ -65,5 +65,6 @@ message each hat waits for. Messages that are only sent, only received, or prese
 unused by this target are marked. The stage's Messages section also draws the whole project as sprite or
 stage, message, sprite or stage, keeping isolated messages in the picture. A message can be renamed from
 the list and from the diagram; the stage owns `broadcast_msg` variables, so a rename applies project-wide.
-`messageReference` in `./project-messages` is the only place that decides what sends or receives a message,
-and the editor's project search calls the same function.
+`messageReference` in `@kubohiroya/turbowarp-plus-editor-project-model` is the only place that decides what
+sends or receives a message, and the editor's project search calls the same function. This package's
+`./project-messages` re-exports it for existing imports.

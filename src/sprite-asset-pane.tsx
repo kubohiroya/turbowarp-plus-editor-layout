@@ -1,7 +1,7 @@
 import React from 'react';
 import {observeTileNameTitles} from './native-tile-title.ts';
 import {SpritePropertiesPanel, type SpritePropertiesPanelProps} from './sprite-properties.tsx';
-import {cloudVariablePrefix, type SpriteVariableEdit, type SpriteVariableEditError} from './sprite-variable-edit.ts';
+import {cloudVariablePrefix, type SpriteVariableEdit, type SpriteVariableEditError} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 
 interface NativeAssetPanelProps {
     children?: React.ReactNode;

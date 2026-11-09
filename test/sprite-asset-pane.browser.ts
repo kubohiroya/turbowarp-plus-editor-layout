@@ -11,7 +11,7 @@ const html = `<!doctype html>
 <link rel="stylesheet" href="/sprite-asset-pane.css">
 <script src="/react.umd.js"></script>
 <script src="/react-dom.umd.js"></script>
-<script type="importmap">{"imports":{"react":"/react.js"}}</script>
+<script type="importmap">{"imports":{"react":"/react.js","@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit":"/sprite-variable-edit.js"}}</script>
 <main style="width: 350px; height: 340px"></main>
 <script type="module">
 import {SpriteAssetPane} from '/sprite-asset-pane.js';
@@ -72,7 +72,7 @@ async function openPage(t) {
     const page = await browser.newPage({viewport: {width: 640, height: 480}});
     const routes = new Map([
         ['/sprite-asset-pane.js', new URL('../dist/sprite-asset-pane.js', import.meta.url)],
-        ['/sprite-variable-edit.js', new URL('../dist/sprite-variable-edit.js', import.meta.url)],
+        ['/sprite-variable-edit.js', require.resolve('@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit')],
         ['/native-tile-title.js', new URL('../dist/native-tile-title.js', import.meta.url)],
         ['/sprite-properties.js', new URL('../dist/sprite-properties.js', import.meta.url)],
         ['/sprite-asset-pane.css', new URL('../src/sprite-asset-pane.css', import.meta.url)],
