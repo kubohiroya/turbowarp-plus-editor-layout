@@ -1,7 +1,7 @@
 {
-  "name": "@kubohiroya/turbowarp-plus-editor-layout",
+  "name": "@kubohiroya/turbowarp-plus-editor-workbench",
   "version": "0.3.0",
-  "description": "Resizable panes and layout for TurboWarp Plus Editor",
+  "description": "The TurboWarp Plus Editor workbench: layout, dockable sprite tabs, stage, debugger tab and file menu",
   "type": "module",
   "license": "MPL-2.0",
   "exports": {
@@ -64,7 +64,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kubohiroya/turbowarp-plus-editor-layout.git"
+    "url": "git+https://github.com/kubohiroya/turbowarp-plus-editor-workbench.git"
   },
   "dependencies": {
     "@kubohiroya/turbowarp-plus-editor-project-model": "0.1.0",

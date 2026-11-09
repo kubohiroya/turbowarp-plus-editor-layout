@@ -1,6 +1,6 @@
 import type {CSSProperties, ReactNode, RefCallback} from 'react';
-import {createLayout} from '@kubohiroya/turbowarp-plus-editor-layout';
-import {createStandardLayout} from '@kubohiroya/turbowarp-plus-editor-layout/standard-layout';
+import {createLayout} from '@kubohiroya/turbowarp-plus-editor-workbench';
+import {createStandardLayout} from '@kubohiroya/turbowarp-plus-editor-workbench/standard-layout';
 declare const React: typeof import('react');
 declare const ReactDOM: typeof import('react-dom/client');
 

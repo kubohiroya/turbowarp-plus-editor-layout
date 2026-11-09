@@ -1,6 +1,12 @@
-# TurboWarp Plus Editor Layout
+# TurboWarp Plus Editor Workbench
 
 [日本語](README.ja.md)
+
+The workbench of TurboWarp Plus Editor: the resizable layout, the Plus standard layout, the Dockview sprite tabs and workspace, the stage surface, the debugger tab and the file menu. The panes inside a sprite tab come from `@kubohiroya/turbowarp-plus-editor-sprite-panes`, the in-page windows from `@kubohiroya/turbowarp-plus-editor-windows`, and project data from `@kubohiroya/turbowarp-plus-editor-project-model`.
+
+This package was published as `@kubohiroya/turbowarp-plus-editor-layout` up to 0.3.0.
+
+## Resizable layout
 
 Resize the divider between the editor and the stage column, or the divider between the stage and the target pane, within a single document. The host passes its React instance to `createLayout(React)` and connects the dividers, styles, and display dimensions provided by the `render` callback to its existing components. The host supplies a storage provider and key, and this package saves and restores the layout settings.
 
@@ -23,7 +29,7 @@ Dividers are enabled by default in the Scratch layout. Selecting a stage size pr
 
 Use `/example/?standard=1` in the test host to try the Plus layout. Use `standard=0` to try the startup fallback to the Scratch layout.
 
-The Editor locks version `0.1.0` of this package as a local dependency and pins its source alongside the Editor revision.
+The Editor pins this package from npm.
 
 ## Verification
 
