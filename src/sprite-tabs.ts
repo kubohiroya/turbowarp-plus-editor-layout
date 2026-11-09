@@ -4,8 +4,8 @@ import {createDockview, DefaultTab, themeLight} from 'dockview';
 import type {DockviewGroupPanel, GroupPanelPartInitParameters, IDockviewPanel, SerializedDockview} from 'dockview';
 import {createSpriteLayoutMenu} from './sprite-layout-menu.ts';
 import {NativeAssetPanel, SpriteAssetPane} from './sprite-asset-pane.tsx';
-import type {NativeAssetPanelRenderer, NativeAssetSelector, SpriteAssetLayout} from './sprite-asset-pane.tsx';
-import type {SpriteVariable} from './sprite-asset-pane.tsx';
+import type {NativeAssetPanelRenderer, NativeAssetSelector, SpriteAssetKind, SpriteAssetLayout, SpriteAssetPreviewItem,
+    SpriteVariable} from './sprite-asset-pane.tsx';
 import type {SpritePropertiesPanelProps} from './sprite-properties.tsx';
 import {SpriteEditorToolbar, spriteEditorSections} from './sprite-editor-toolbar.tsx';
 import type {SpriteSearchResult} from './sprite-editor-toolbar.tsx';
@@ -21,6 +21,7 @@ import type {MessageRenameError} from './sprite-message-pane.tsx';
 import type {MessageUse, ProjectMessage, TargetMessages} from './project-messages.ts';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
+export type {SpriteAssetKind, SpriteAssetPreviewItem} from './sprite-asset-pane.tsx';
 export {editSpriteVariable} from './sprite-variable-edit.ts';
 
 export {useDockviewStage} from './dockview-stage.ts';
@@ -76,16 +77,7 @@ export interface SpriteAssetSelection {
     rememberScrollTop?(position: number): void;
 }
 
-export type SpriteAssetKind = 'costumes' | 'sounds';
 type AssetKind = SpriteAssetKind;
-
-export interface SpriteAssetPreviewItem {
-    asset: object;
-    name: string;
-    imageUrl?: string;
-    buffer?: AudioBuffer;
-    duration?: number;
-}
 
 const variableSection = spriteEditorSections.indexOf('variables');
 const messageSection = spriteEditorSections.indexOf('messages');

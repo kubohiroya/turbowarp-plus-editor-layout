@@ -1,7 +1,6 @@
 import React from 'react';
 import {observeTileNameTitles} from './native-tile-title.ts';
 import {SpritePropertiesPanel, type SpritePropertiesPanelProps} from './sprite-properties.tsx';
-import type {SpriteAssetKind, SpriteAssetPreviewItem} from './sprite-tabs.ts';
 import {cloudVariablePrefix, type SpriteVariableEdit, type SpriteVariableEditError} from './sprite-variable-edit.ts';
 
 interface NativeAssetPanelProps {
@@ -21,6 +20,16 @@ interface NativeSelectorProps extends NativeAssetPanelProps {
     draggingType?: null;
     onAddSortable?(): void;
     onRemoveSortable?(): void;
+}
+
+export type SpriteAssetKind = 'costumes' | 'sounds';
+
+export interface SpriteAssetPreviewItem {
+    asset: object;
+    name: string;
+    imageUrl?: string;
+    buffer?: AudioBuffer;
+    duration?: number;
 }
 
 export type NativeAssetSelector = React.ComponentType<NativeSelectorProps>;
