@@ -1,4 +1,10 @@
-# TurboWarp Plus Editor Layout
+# TurboWarp Plus Editor Workbench
+
+TurboWarp Plus Editor の作業画面。分割レイアウト、Plus 標準配置、Dockview のスプライトタブとワークスペース、ステージ、デバッガーのタブ、ファイルメニューを担う。スプライトタブの中のペインは `@kubohiroya/turbowarp-plus-editor-sprite-panes`、ページ内の窓は `@kubohiroya/turbowarp-plus-editor-windows`、作品データの読み取りは `@kubohiroya/turbowarp-plus-editor-project-model` から使う。
+
+このパッケージは 0.3.0 まで `@kubohiroya/turbowarp-plus-editor-layout` として公開していた。
+
+## 分割レイアウト
 
 同じ document 内で「編集領域／ステージ列」と「ステージ／対象領域」の境界を調整する。ホストは `createLayout(React)` に既存の React を渡し、`render` に渡される境界・スタイル・表示サイズを既存コンポーネントに接続する。ホストがストレージとキーを指定し、このパッケージが設定を保存・復元する。
 
@@ -21,7 +27,7 @@ Scratch 配置では分割を既定で有効にする。既存のステージサ
 
 試験用ホストの `/example/?standard=1` で Plus と Scratch の往復を確認できる。`standard=0` は起動時の切り戻しを再現する。
 
-Editor はこのパッケージの `0.1.0` をローカル依存としてロックし、Editor のリビジョンと一緒にソースを固定する。
+Editor はこのパッケージを npm から固定して使う。
 
 ## 検証
 
