@@ -1,4 +1,4 @@
-import {observeTileNameTitles} from './native-tile-title.ts';
+import {observeTileNameTitles} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/native-tile-title';
 
 const tileHeight = 80;
 const minTileWidth = 72;

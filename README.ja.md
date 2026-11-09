@@ -28,13 +28,11 @@ Editor はこのパッケージの `0.1.0` をローカル依存としてロッ�
 `npm test` で配分・縦横比・設定の読み書きを、`npm run test:browser` で独立した試験用ホストを検証する。試験用ホストを手動で開くには、このディレクトリで `npm install` と `python3 -m http.server` を実行し、`/example/` を表示する。
 
 Editor のルートから、`site/source.json` の GUI を `npm run build:pages` でビルドし、`E2E_GUI_ROOT=/absolute/gui-checkout E2E_PATH_PREFIX=/turbowarp-plus-editor/ node --test test/editor-layout.browser.ts` を実行する。同じ GUI をホスト接続なしでビルドしたディレクトリを `E2E_LAYOUT_BARE_BUILD` に渡すと、GUI 単体の動作も検証する。
-## 別窓ステージとスプライト設定
+## 別窓ステージ
 
 `attachStageInput` は、ホストから渡された別ウィンドウの document とキャンバスを使って、入力の購読と解放を管理する。ポインター処理とドラッグ状態の解除はホストのコールバックを使用する。
 
-`sprite-properties` は設定フォーム、一覧のスタイル、選択が変わった場合の編集拒否と VM への更新を担当する。ホストは選択中の値、VM、従来フォームと表示先を渡す。
-
-設定フォームは以前のスプライト設定ソース `80825f7` から移設した。以前の配布アーカイブのソース `b0390c3` から移設したウィンドウ部品は、`@kubohiroya/turbowarp-plus-editor-windows` に移った。Scratch GUI の本家実装はこのパッケージに取り込んでいないため、GPL のコードを含まず、GPL のモジュールも import しない。ライセンスは MPL-2.0 とする。MPL-2.0 は GPL を二次ライセンスとして認めるので、GPL-3.0 の Editor に組み込んで配信できる。ソースに「Incompatible With Secondary Licenses」の表示は付けない。付けると Editor に組み込めなくなる。
+スプライト編集タブの中のペイン（素材と変数、メッセージ、設定フォーム、セクション切り替えのツールバー）は `@kubohiroya/turbowarp-plus-editor-sprite-panes` に移った。このパッケージはそれらをタブや分割に並べる。以前の配布アーカイブのソース `b0390c3` から移設したウィンドウ部品は、`@kubohiroya/turbowarp-plus-editor-windows` に移った。Scratch GUI の本家実装はこのパッケージに取り込んでいないため、GPL のコードを含まず、GPL のモジュールも import しない。ライセンスは MPL-2.0 とする。MPL-2.0 は GPL を二次ライセンスとして認めるので、GPL-3.0 の Editor に組み込んで配信できる。ソースに「Incompatible With Secondary Licenses」の表示は付けない。付けると Editor に組み込めなくなる。
 
 ## デバッガーのタブ
 
@@ -62,10 +60,7 @@ Editor がファイルメニューの接続口を提供している場合は、�
 Web 版の Plus 標準配置で `twPlusDockview=1` を付けて起動すると、スプライト編集ペインを左右・上下に分割できます。同じスプライトを複数のペインで開いた場合、表示セクション、コスチュームと音の選択、素材一覧のスクロール位置をペインごとに保持します。変数の値はプロジェクト内で共有され、編集中のペインで変更できます。URL から `twPlusDockview=1` を外して再読み込みすると、通常のスプライトタブに戻ります。
 
 スプライトと背景の編集タブには「コード」「コスチューム / 背景」「音」「変数など」に続いて「メッセージ」がある。
-このスプライトまたは背景が、どのメッセージをどのブロックで送り、どのメッセージをどのハットで受け取るのかを
-送信・受信の2群で一覧する。送信だけ・受信だけのメッセージと、作品にはあるがこの対象では使っていない
-メッセージも分かる。背景の「メッセージ」には、さらに「スプライトまたは背景」-「メッセージ」-
-「スプライトまたは背景」の作品全体の関係図を描く。孤立したメッセージも図に残る。
-メッセージ名は一覧と関係図から変更でき、`broadcast_msg` はステージ所有なので作品全体に及ぶ。
+表示は `@kubohiroya/turbowarp-plus-editor-sprite-panes` の `SpriteMessagePane` が担う。
+`broadcast_msg` はステージ所有なので、メッセージ名の変更は作品全体に及ぶ。
 送受信の判定は `@kubohiroya/turbowarp-plus-editor-project-model` の `messageReference` だけが持ち、Editor の作品内検索も同じ関数を使う。
 このパッケージの `./project-messages` は、既存の import のためにそれを再 export している。

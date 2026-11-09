@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<title>Sprite layout menu</title>
+<link rel="stylesheet" href="../src/sprite-layout-menu.css">
+<style>
+    body { font: 13px system-ui, sans-serif; }
+</style>
+<div id="header" style="width: 150px; height: 30px; overflow: hidden; transform: translateX(0)"></div>
+<output id="command"></output>
+<script type="module">
+    import {createSpriteLayoutMenu} from '../dist/sprite-layout-menu.js';
+    const output = document.getElementById('command');
+    document.getElementById('header').append(createSpriteLayoutMenu(document, 'en', {
+        splitRight: () => {output.textContent = 'right';},
+        splitBelow: () => {output.textContent = 'below';},
+        close: () => {output.textContent = 'closed';},
+        canClose: () => output.textContent !== ''
+    }).element);
+</script>
+</html>

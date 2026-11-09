@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-plus-editor-layout",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Resizable panes and layout for TurboWarp Plus Editor",
   "type": "module",
   "license": "MPL-2.0",
@@ -19,29 +19,14 @@
     },
     "./editor.css": "./src/editor.css",
     "./targets.css": "./src/targets.css",
-    "./sprite-properties": {
-      "types": "./dist/sprite-properties.d.ts",
-      "default": "./dist/sprite-properties.js"
-    },
     "./project-messages": {
       "types": "./dist/project-messages.d.ts",
       "default": "./dist/project-messages.js"
     },
-    "./sprite-properties.css": "./src/sprite-properties.css",
     "./sprite-tabs": {
       "types": "./dist/sprite-tabs.d.ts",
       "default": "./dist/sprite-tabs.js"
     },
-    "./sprite-asset-pane": {
-      "types": "./dist/sprite-asset-pane.d.ts",
-      "default": "./dist/sprite-asset-pane.js"
-    },
-    "./sprite-asset-pane.css": "./src/sprite-asset-pane.css",
-    "./sprite-editor-toolbar": {
-      "types": "./dist/sprite-editor-toolbar.d.ts",
-      "default": "./dist/sprite-editor-toolbar.js"
-    },
-    "./sprite-editor-toolbar.css": "./src/sprite-editor-toolbar.css",
     "./sprite-layout-menu.css": "./src/sprite-layout-menu.css",
     "./dockview-styles": "./dist/dockview-styles.js",
     "./debugger-panel": {
@@ -83,6 +68,7 @@
   },
   "dependencies": {
     "@kubohiroya/turbowarp-plus-editor-project-model": "0.1.0",
+    "@kubohiroya/turbowarp-plus-editor-sprite-panes": "0.1.0",
     "dockview": "8.8.3"
   },
   "peerDependencies": {
