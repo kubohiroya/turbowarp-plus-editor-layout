@@ -53,7 +53,10 @@ const names = {
     bar: ['ドロワーの表示', 'Drawer views']
 } as const;
 
-export const isJapanese = (locale: string) => /^ja(?:-|$)/i.test(locale ?? '');
+/** The AI agent button's sparkle, also used beside the host's entry for the AI agent settings. */
+export const agentsIconPath = 'M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 8 6.6 6.6Z';
+
+export const isJapanese =(locale: string) => /^ja(?:-|$)/i.test(locale ?? '');
 export const drawerLabel = (id: keyof typeof names, locale: string) => names[id][isJapanese(locale) ? 0 : 1];
 
 /** The supported host views in button order, without unknown or repeated ids. */
@@ -109,7 +112,7 @@ export function createDrawerViewBar(React, styles) {
         project: () => svg(element('path', {d: 'M1.5 4V13h13V5.5H8L6.5 3.5h-4A1 1 0 0 0 1.5 4.5Z'})),
         'git-history': () => svg(element('circle', {cx: 5, cy: 3.5, r: 1.5}), element('circle', {cx: 5, cy: 12.5, r: 1.5}),
             element('circle', {cx: 11, cy: 6.5, r: 1.5}), element('path', {d: 'M5 5v6M11 8c0 2.5-6 1.5-6 3'})),
-        agents: () => svg(element('path', {d: 'M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 8 6.6 6.6Z'}))
+        agents: () => svg(element('path', {d: agentsIconPath}))
     };
 
     function AgentMenu({menu, locale, button, onFocus, onKeyDown, tabIndex}) {

@@ -175,3 +175,49 @@ test('the drawer bar switches host views, keeps the choice and opens the agent m
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expect(project).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('the AI agent menu opens services and the settings dialog saves the user\'s own service', {timeout: 30_000}, async t => {
+    const page = await openExample(t);
+    await page.goto(origin + example + '?standard=1&drawer=1&lang=ja');
+    const agents = page.getByRole('toolbar', {name: 'ドロワーの表示'}).getByRole('button', {name: 'AI エージェント'});
+    const menu = page.getByRole('menu', {name: 'AI エージェント'});
+    await agents.click();
+    await expect(menu.getByRole('menuitem')).toHaveText(['ChatGPT', 'Claude', 'AI エージェント設定…']);
+    await expect(menu.getByRole('separator')).toHaveCount(1);
+    await page.keyboard.press('ArrowDown');
+    await expect(menu.getByRole('menuitem', {name: 'Claude'})).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('html')).toHaveAttribute('data-agent', 'https://claude.ai/new');
+    await expect(menu).toHaveCount(0);
+    await expect(agents).toBeFocused();
+
+    await agents.click();
+    await menu.getByRole('menuitem', {name: 'AI エージェント設定…'}).click();
+    const dialog = page.getByRole('dialog', {name: 'AI エージェント設定'});
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('ChatGPT をメニューに出す')).toBeFocused();
+    await dialog.getByLabel('ChatGPT をメニューに出す').uncheck();
+    await dialog.getByRole('button', {name: 'サービスを追加'}).click();
+    const row = dialog.getByRole('group', {name: '追加したサービス 1'});
+    await expect(row.getByLabel('名前')).toBeFocused();
+    await row.getByLabel('名前').fill('前回の会話');
+    await row.getByLabel('URL').fill('http://chatgpt.com/c/1');
+    await dialog.getByRole('button', {name: '保存'}).click();
+    await expect(row.getByText('https: で始まるアドレスだけを使えます。')).toBeVisible();
+    await expect(row.getByLabel('URL')).toBeFocused();
+    await row.getByLabel('URL').fill('https://chatgpt.com/c/1');
+    await dialog.getByRole('button', {name: '保存'}).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(agents).toBeFocused();
+
+    await page.reload();
+    await agents.click();
+    await expect(menu.getByRole('menuitem')).toHaveText(['Claude', '前回の会話', 'AI エージェント設定…']);
+    await menu.getByRole('menuitem', {name: '前回の会話'}).click();
+    await expect(page.locator('html')).toHaveAttribute('data-agent', 'https://chatgpt.com/c/1');
+    await agents.click();
+    await menu.getByRole('menuitem', {name: 'AI エージェント設定…'}).click();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(agents).toBeFocused();
+});

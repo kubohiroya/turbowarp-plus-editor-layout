@@ -50,7 +50,26 @@ Plus 標準配置の左側ドロワーは、スプライト一覧と背景を表
 - 選んだ内容は、分割レイアウトと同じ `storage` の `<storageKey>.drawer`（`{"version": 1, "view": "project"}`）に保存する。保存した内容をホストが渡していないときはスプライト一覧に戻り、ホストがまた渡すと復元する。
 - `drawerViews` がないとき、または使える内容も `agents` もないときは、ドロワーは変わらない。ボタンを出さず、スプライト一覧を囲む要素も足さない。内容は起動時から渡す。後から最初の内容を足すと、GUI の対象ペインを 1 度作り直す。
 
-試験用ホストの `/example/?standard=1&drawer=1&lang=ja` で、見本の内容を入れたボタンを試せる。
+試験用ホストの `/example/?standard=1&drawer=1&lang=ja` で、見本の内容を入れたボタンと、パッケージの AI エージェントのメニューを試せる。
+
+### AI エージェントのメニューと設定
+
+`@kubohiroya/turbowarp-plus-editor-workbench/ai-agents` は、4 のボタンのメニューと、その設定のダイアログを渡す。
+
+```tsx
+import styles from '@kubohiroya/turbowarp-plus-editor-workbench/editor.css';
+import {createAiAgents} from '@kubohiroya/turbowarp-plus-editor-workbench/ai-agents';
+
+const aiAgents = createAiAgents(React, {styles});
+<StandardLayout {...props} drawerViews={{views, agents: aiAgents.drawerMenu}} />
+// ほかの場所、たとえば設定のメニューの項目（アイコンは aiAgents.settingsIcon()）から:
+aiAgents.openSettings({locale, returnFocus: trigger});
+```
+
+- メニューは、メニューに出すことにしたサービスを、アイコンと名前で並べ、区切りのあとに「AI エージェント設定…」を置く。出すサービスがないときは、その項目と短い案内だけを出す。矢印キー、Home、End で項目を移る。サービスを選ぶと、`window.open(url, '_blank', 'noopener,noreferrer')` で開く。
+- 用意されたサービスは ChatGPT（`https://chatgpt.com/`）と Claude（`https://claude.ai/new`）。それぞれメニューから外せ、以前の会話などの URL に置き換えられる。URL を空にすると既定に戻る。利用者は、名前と URL で自分のサービスを足し、消せる。URL は `https:` で始まるものだけを受け付け、ほかは欄の下に誤りを出す。アイコンは汎用のもので、用意されたサービスは頭文字入りの吹き出し、自分のサービスは地球儀にする。各サービスのロゴは使わない。
+- ダイアログ（`role="dialog"`、`aria-modal`）は React を使わない DOM で、`openAgentSettingsDialog` で開ける。開くと最初の欄に移り、Tab はダイアログの中を回る。Escape かキャンセルで保存せずに閉じ、`returnFocus`、なければ開く前の要素に戻る。
+- 設定は `localStorage` の `twPlusAiAgents` に `{"version": 1, "services": [...]}` で保存する。各サービスの `target` は `kind: "url"`。ほかの `kind` は後の段階のためにあけてあり、いまは読み飛ばす。ない・壊れた・誤ったデータは、項目ごとに既定に戻す。
 
 ## 検証
 

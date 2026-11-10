@@ -2,6 +2,7 @@ import type {CSSProperties, ReactNode, RefCallback} from 'react';
 import {createLayout} from '@kubohiroya/turbowarp-plus-editor-workbench';
 import {createStandardLayout} from '@kubohiroya/turbowarp-plus-editor-workbench/standard-layout';
 import type {DrawerViews} from '@kubohiroya/turbowarp-plus-editor-workbench/standard-layout';
+import {createAiAgents} from '@kubohiroya/turbowarp-plus-editor-workbench/ai-agents';
 declare const React: typeof import('react');
 declare const ReactDOM: typeof import('react-dom/client') & typeof import('react-dom');
 
@@ -64,11 +65,8 @@ const drawerViews: DrawerViews | undefined = params.get('drawer') === '1' ? {
         render: () => h('ol', {'aria-label': ja ? 'コミット' : 'Commits'},
             ['Add a sprite', 'Initial commit'].map(name => h('li', {key: name}, name)))
     }],
-    agents: {
-        renderMenu: ({close}) => h('div', {role: 'menu', 'aria-label': ja ? 'AI エージェント' : 'AI agents'},
-            ['ChatGPT', 'Claude'].map(name => h('button', {key: name, type: 'button', role: 'menuitem',
-                onClick: () => { document.documentElement.dataset.agent = name; close(); }}, name)))
-    }
+    // The package's own AI agent menu; choosing a service records it instead of opening a tab.
+    agents: createAiAgents(React, {styles, open: url => { document.documentElement.dataset.agent = url; }}).drawerMenu
 } : undefined;
 
 function SpriteList() {
