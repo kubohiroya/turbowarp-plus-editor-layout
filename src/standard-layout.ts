@@ -1,5 +1,10 @@
 import {createLayout, createSplitter, splitAxis} from './index.ts';
 import {createTargetList} from './targets.ts';
+import type {DrawerViews} from './drawer-views.ts';
+import {availableDrawerViews, createDrawerViewBar, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
+
+export type {DrawerMenu, DrawerMenuRenderProps, DrawerRenderProps, DrawerView, DrawerViewId, DrawerViews,
+    HostDrawerViewId} from './drawer-views.ts';
 
 const isJapanese = locale => /^ja(?:-|$)/i.test(locale);
 const singleColumnTargetWidth = 108;
@@ -10,12 +15,13 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     const SplitLayout = createLayout(React);
     const Splitter = createSplitter(React);
     const targets = createTargetList(React, targetStyles);
+    const DrawerViewBar = createDrawerViewBar(React, styles);
     const targetSearch = React.createContext('');
     const targetTools = React.createContext(null);
 
     function StandardLayout({
         enabled, splitter, windowLayout, stageActionEnabled, stageDrawer = false,
-        onPaletteModeChange, windowTools, Container, render, ...props
+        onPaletteModeChange, windowTools, Container, render, drawerViews = undefined as DrawerViews | undefined, ...props
     }) {
         const [showUndock, setShowUndock] = useState(false);
         const [targetsPinned, setTargetsPinned] = useState(true);
@@ -25,6 +31,14 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const [targetRatio, setTargetRatio] = useState(null);
         const [preferredStageWidth, setPreferredStageWidth] = useState(null);
         const [stageActionMount, setStageActionMount] = useState(null);
+        const [preferredDrawerView, setPreferredDrawerView] = useState(() => readDrawerView(props.storage, props.storageKey));
+        const hostDrawerViews = availableDrawerViews(drawerViews);
+        // A view saved earlier comes back once the host supplies it again.
+        const drawerView = hostDrawerViews.some(view => view.id === preferredDrawerView) ? preferredDrawerView : 'sprites';
+        const selectDrawerView = view => {
+            setPreferredDrawerView(view);
+            writeDrawerView(props.storage, props.storageKey, view);
+        };
         const body = useRef(null);
         const plusLayout = enabled && !props.fullscreen;
         const stageHidden = plusLayout && !showStage;
@@ -146,7 +160,8 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         });
         return element(context.Provider, {value: {
             showUndock, plusLayout, targetsPinned, setTargetsPinned, stageHidden, setStageVisible: setShowStage, stageResize, stageActionMount,
-            stageDrawer: plusLayout && stageDrawer, setStageDrawerOpen, locale: props.locale
+            stageDrawer: plusLayout && stageDrawer, setStageDrawerOpen, locale: props.locale,
+            drawerViews, drawerView, selectDrawerView
         }},
             Container ? element(Container, {locale: props.locale}, layout) : layout);
     }
@@ -256,13 +271,27 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     }
 
     function TargetLayout({compact, render}) {
-        const {plusLayout, targetsPinned, locale} = useContext(context);
+        const {plusLayout, targetsPinned, locale, drawerViews, drawerView = 'sprites', selectDrawerView} = useContext(context);
         const tools = useState(null);
         const panel = render(plusLayout || compact);
-        return plusLayout ? element(EdgeDrawer, {
+        if (!plusLayout) return panel;
+        const content = element(targetTools.Provider, {value: tools}, panel);
+        const drawer = children => element(EdgeDrawer, {
             edge: 'left', pinned: targetsPinned,
             label: isJapanese(locale) ? 'スプライト一覧を展開' : 'Reveal sprite list'
-        }, element(targetTools.Provider, {value: tools}, panel)) : panel;
+        }, children);
+        // Without host views the drawer keeps the sprite list as its only, unwrapped content.
+        if (!hasDrawerBar(drawerViews)) return drawer(content);
+        const views = availableDrawerViews(drawerViews);
+        const active = views.find(view => view.id === drawerView);
+        return drawer(element(React.Fragment, null,
+            element(DrawerViewBar, {locale, views, agents: drawerViews.agents, selected: active ? active.id : 'sprites',
+                onSelect: selectDrawerView}),
+            active?.tools && element('div', {className: styles.drawerViewTools}, active.tools({locale})),
+            // The GUI's target pane stays mounted, so its file inputs and library keep working while hidden.
+            element('div', {className: styles.drawerSprites, hidden: Boolean(active)}, content),
+            active && element('div', {className: styles.drawerViewContent, 'data-drawer-content': active.id},
+                active.render({locale}))));
     }
 
     function SpriteGrid(props) {

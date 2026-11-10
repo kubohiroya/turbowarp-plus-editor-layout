@@ -31,6 +31,29 @@ Use `/example/?standard=1` in the test host to try the Plus layout. Use `standar
 
 The Editor pins this package from npm.
 
+## Left drawer views
+
+In the Plus standard layout, the left drawer shows the sprite list and backdrop. A host can add more contents by passing `drawerViews` to `StandardLayout`:
+
+```js
+<StandardLayout {...props} storage={localStorage} storageKey="twPlusEditorLayout" drawerViews={{
+    views: [
+        {id: 'project', render: ({locale}) => <ProjectExplorer locale={locale} />, tools: ({locale}) => <ExplorerTools />},
+        {id: 'git-history', label: 'Git history', icon: <HistoryIcon />, render: () => <GitHistory />}
+    ],
+    agents: {renderMenu: ({locale, close}) => <div role="menu">…</div>}
+}} />
+```
+
+- The top of the drawer then shows a 2×2 bar of icon-only buttons (`role="toolbar"`, "ドロワーの表示" / "Drawer views"): 1 Sprites, 2 Project folder, 3 Git history and 4 AI agents. Each has `aria-label` and `title` in Japanese or English. A button is shown only for what the host supplies; the sprite list is always first.
+- Buttons 1–3 switch the content and mark the selected one with `aria-pressed`. Arrow keys move between the buttons with one tab stop (left and right wrap around, up and down move between the rows, Home and End go to the ends); Enter and Space activate.
+- `id` is `project` or `git-history`; unknown and repeated ids are ignored. `label` and `icon` default to the package's names and 16 px `currentColor` icons. `render` is called only while the view is selected. `tools` is shown where the sprite list shows its search, pin and undock buttons, which appear only while the sprite list is selected. The GUI's target pane stays mounted, hidden, while another view is shown.
+- Button 4 is a menu button (`aria-haspopup="menu"`, `aria-expanded`). `renderMenu` renders the menu content, normally one `role="menu"` element with `menuitem` children. The first item gets focus when the menu opens. Escape, a press outside or `close()` closes it and returns focus to the button. The menu does not change the drawer's content.
+- The selected view is saved in `storage` under `<storageKey>.drawer` (`{"version": 1, "view": "project"}`), next to the split layout. A saved view the host does not supply falls back to the sprite list and comes back when the host supplies it again.
+- Without `drawerViews`, or with no supported views and no `agents`, the drawer is unchanged: no bar and no extra element around the sprite list. Supply the views from startup; adding the first one later remounts the GUI's target pane once.
+
+Use `/example/?standard=1&drawer=1&lang=ja` in the test host to try the bar with sample views.
+
 ## Verification
 
 Run `npm test` to verify split sizing, aspect ratios, and settings persistence. Run `npm run test:browser` to test the standalone host. To open the test host manually, run `npm install` and `python3 -m http.server` in this directory, then open `/example/`.
