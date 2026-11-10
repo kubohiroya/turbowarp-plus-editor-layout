@@ -153,7 +153,7 @@ export function createDrawerViewBar(React, styles) {
             }, menu.renderMenu({locale, close: () => close()})));
     }
 
-    /** The 2×2 bar of icon buttons at the top of the left drawer. */
+    /** The row of icon buttons at the top of the left drawer. */
     return function DrawerViewBar({locale, views, agents, selected, onSelect}) {
         const bar = useRef(null);
         const agentButton = useRef(null);
@@ -168,12 +168,11 @@ export function createDrawerViewBar(React, styles) {
         const move = (event, index) => {
             const buttons = bar.current.querySelectorAll('[data-drawer-view]');
             const rtl = bar.current.ownerDocument.defaultView.getComputedStyle(bar.current).direction === 'rtl';
-            const step = {ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1, ArrowDown: 2, ArrowUp: -2}[event.key];
+            const step = {ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1}[event.key];
             let next;
             if (event.key === 'Home') next = 0;
             else if (event.key === 'End') next = count - 1;
-            else if (Math.abs(step) === 1) next = (index + step + count) % count;
-            else if (step) next = index + step >= 0 && index + step < count ? index + step : index;
+            else if (step) next = (index + step + count) % count;
             else return;
             event.preventDefault();
             setFocused(next);

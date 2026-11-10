@@ -135,7 +135,8 @@ test('the drawer bar switches host views, keeps the choice and opens the agent m
     await expect(spriteTools).toBeVisible();
     const boxes = await Promise.all([sprites, project, bar.getByRole('button', {name: 'Git 履歴'}), agents]
         .map(button => button.boundingBox()));
-    assert.ok(boxes[0].y === boxes[1].y && boxes[2].y === boxes[3].y && boxes[2].y > boxes[0].y, 'two rows of two');
+    assert.ok(boxes.every(box => box.y === boxes[0].y), 'one row');
+    assert.ok(boxes.every((box, index) => index === 0 || box.x > boxes[index - 1].x), 'in order');
     assert.ok(boxes.every(box => box.x >= 0 && box.x + box.width <= 120), 'inside the drawer');
     const screenshot = process.env.DRAWER_BAR_SCREENSHOT;
     if (screenshot) {

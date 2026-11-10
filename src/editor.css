@@ -635,7 +635,8 @@ details.layout-menu button {
     position: relative;
     display: grid;
     flex: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* One row as long as the drawer is wide enough; the buttons wrap only when it is too narrow. */
+    grid-template-columns: repeat(auto-fit, minmax(1.375rem, 1fr));
     gap: 0.125rem;
     padding-block-end: 0.25rem;
     margin-block-end: 0.25rem;
