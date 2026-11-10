@@ -5,7 +5,7 @@ import type {DocumentPanelRequest} from './document-workspace.ts';
 type Grid = SerializedDockview['grid'];
 type Node = Grid['root'];
 export type PanelReference =
-    | {kind: 'sprite'; name: string; stage: boolean; section: number}
+    | {kind: 'sprite'; name: string; stage: boolean; section: number; number?: number}
     | {kind: 'stage'}
     | ({kind: 'document'} & DocumentPanelRequest['reference']);
 
@@ -168,8 +168,11 @@ export function readWorkspaceLayout(raw: string, project: string): WorkspaceLayo
         const panel = input.panels[id];
         if (!Object.hasOwn(input.panels, id) || !record(panel)) return;
         if (panel.kind === 'sprite' && validId(panel.name) && typeof panel.stage === 'boolean' &&
-            typeof panel.section === 'number' && Number.isInteger(panel.section) && panel.section >= 0 && panel.section <= 3) {
-            panels[id] = {kind: 'sprite', name: panel.name, stage: panel.stage, section: panel.section};
+            typeof panel.section === 'number' && Number.isInteger(panel.section) && panel.section >= 0 && panel.section <= 4) {
+            const number = panel.number;
+            if (number !== undefined && (typeof number !== 'number' || !Number.isSafeInteger(number) || number < 2)) return;
+            panels[id] = {kind: 'sprite', name: panel.name, stage: panel.stage, section: panel.section,
+                ...(typeof number === 'number' && {number})};
         } else if (panel.kind === 'stage' && !hasStage) {
             hasStage = true;
             panels[id] = {kind: 'stage'};

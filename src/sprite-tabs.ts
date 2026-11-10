@@ -19,12 +19,14 @@ import type {SpriteVariableEdit, SpriteVariableEditError} from '@kubohiroya/turb
 import {SpriteMessagePane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
 import type {MessageRenameError} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
 import type {MessageUse, ProjectMessage, TargetMessages} from '@kubohiroya/turbowarp-plus-editor-project-model/project-messages';
+import {createRenameMenuItem, spriteRenameLabel} from './target-tab-menu.ts';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
 export type {SpriteAssetKind, SpriteAssetPreviewItem} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 export {editSpriteVariable} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 
 export {useDockviewStage} from './dockview-stage.ts';
+export {SpriteTargetTabsContext, useTargetTabMenu} from './target-tab-menu.ts';
 
 interface CostumeAsset {
     encodeDataURI(): string;
@@ -193,14 +195,15 @@ interface TabSlot {
 interface View<Snapshot> {
     id: string;
     target: Target;
+    number?: number;
     section: number;
     assets: ReturnType<typeof createAssetSelections>;
     snapshots?: Map<number, {snapshot: Snapshot; view: SpriteTabView}>;
 }
 
 const renameLabels = {
-    en: {title: 'Rename sprite', name: 'Sprite name', cancel: 'Cancel', save: 'Rename'},
-    ja: {title: 'スプライト名の変更', name: 'スプライト名', cancel: 'キャンセル', save: '変更'}
+    en: {title: spriteRenameLabel('en'), name: 'Sprite name', cancel: 'Cancel', save: 'Rename'},
+    ja: {title: spriteRenameLabel('ja'), name: 'スプライト名', cancel: 'キャンセル', save: '変更'}
 };
 type RenameLabels = typeof renameLabels.en;
 const targetName = (target: Target) => target.isStage ? 'Stage' : target.getName();
@@ -244,7 +247,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const japanese = /^ja(?:-|$)/i.test(locale);
     const editLabel = japanese ? 'クリックしてこのビューで編集' : 'Activate this view to edit';
     const backdropTitle = japanese ? '背景' : 'Backdrops';
-    const tabTitle = (target: Target) => target.isStage ? backdropTitle : target.getName();
+    const baseTitle = (target: Target) => target.isStage ? backdropTitle : target.getName();
+    const numberedTitle = (target: Target, number: number) => `${baseTitle(target)}(${number})`;
+    const tabTitle = ({target, number}: View<Snapshot>) => number ? numberedTitle(target, number) : baseTitle(target);
     const chipText = japanese ?
         {collapse: 'グループを折りたたむ', expand: 'グループを展開する', close: 'このグループのタブを閉じる', closeAll: 'この分割パネルの文書タブをすべて閉じる'} :
         {collapse: 'Collapse group', expand: 'Expand group', close: 'Close the tabs of this group', closeAll: 'Close all document tabs of this split'};
@@ -295,10 +300,23 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             }}
         ],
         getTabContextMenuItems: ({panel}) => {
-            const target = views.get(panel.id)?.target;
-            if (!target || target.isStage || !vm.renameSprite) return [];
-            return [{label: text.title, action: () => openRenameDialog(target)}];
+            const view = views.get(panel.id);
+            if (!view) return [];
+            const items = [];
+            if (multiView) items.push({
+                label: japanese ? '新しいタブで開く' : 'Open in new tab',
+                action: () => openInNewTab(view.id)
+            });
+            if (!view.target.isStage && vm.renameSprite) items.push({
+                component: 'rename-sprite'
+            });
+            return items;
         },
+        createContextMenuItemComponent: ({component}) => component === 'rename-sprite' ?
+            createRenameMenuItem(document, text.title, id => {
+                const target = views.get(id)?.target;
+                if (target) openRenameDialog(target);
+            }) : undefined,
         createComponent: ({name, id: componentId}) => {
             const element = document.createElement('div');
             if (name === documentComponent) {
@@ -618,23 +636,48 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         refreshSurfaces();
     }
 
-    function add(target: Target, splitPosition?: {referencePanel: string; direction: SpriteSplitDirection}, section?: number) {
+    function nextTabNumber(target: Target, titles: ReadonlySet<string>) {
+        let number = 2;
+        while (titles.has(numberedTitle(target, number))) number++;
+        return number;
+    }
+
+    function reservedTitles() {
+        return new Set([...originalTargets().map(baseTitle),
+            ...dockview.panels.filter(panel => !views.has(panel.id)).map(panel => panel.title)]);
+    }
+
+    function assignTabNumbers(items: Iterable<View<Snapshot>>, titles = reservedTitles()) {
+        const originals = new Set<Target>();
+        for (const view of items) {
+            if (!view.number && !originals.has(view.target)) {
+                originals.add(view.target);
+                continue;
+            }
+            if (!view.number || titles.has(tabTitle(view))) view.number = nextTabNumber(view.target, titles);
+            titles.add(tabTitle(view));
+        }
+    }
+
+    function add(target: Target, position?: {referencePanel: string; direction: SpriteSplitDirection | 'within'}, section?: number) {
         let id = target.id;
-        if (splitPosition || views.has(id) || id === stagePanelId || documents.has(id)) {
+        if (position || views.has(id) || id === stagePanelId || documents.has(id)) {
             do {
                 id = 'sprite-view-' + ++nextView;
             } while (views.has(id) || documents.has(id) || vm.runtime.targets.some(item => item.id === id));
         }
-        const source = splitPosition && views.get(splitPosition.referencePanel);
+        const source = position && views.get(position.referencePanel);
         // An inactive panel leaves dockview without an active group, and dockview then opens each later
         // panel in a new group; keep sprites added without a split as tabs of an existing sprite group.
-        const spriteGroup = !splitPosition && !dockview.activeGroup &&
+        const spriteGroup = !position && !dockview.activeGroup &&
             dockview.groups.find(group => group.panels.some(panel => views.has(panel.id)));
-        views.set(id, {id, target, section: section ?? remembered.get(target) ?? options.getSection(),
-            assets: createAssetSelections(target, locale, source?.assets)});
+        const view = {id, target, section: section ?? remembered.get(target) ?? options.getSection(),
+            number: source && nextTabNumber(target, new Set([...reservedTitles(), ...[...views.values()].map(tabTitle)])),
+            assets: createAssetSelections(target, locale, source?.assets)};
+        views.set(id, view);
         try {
-            return dockview.addPanel({id, title: tabTitle(target), component: 'sprite', inactive: !splitPosition,
-                position: splitPosition ?? (spriteGroup ? {referenceGroup: spriteGroup} : undefined),
+            return dockview.addPanel({id, title: tabTitle(view), component: 'sprite', inactive: !position,
+                position: position ?? (spriteGroup ? {referenceGroup: spriteGroup} : undefined),
                 params: {icon: getIcon(target)}});
         } catch (error) {
             views.delete(id);
@@ -662,6 +705,26 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         const view = recent && views.get(recent.id) === recent ? recent :
             [...views.values()].find(item => item.target === target);
         activateView(view?.id ?? add(target).id);
+    }
+
+    function targetTabs(id?: string) {
+        return dockview.groups.map(group => ({group, rect: group.element.getBoundingClientRect()}))
+            .sort((a, b) => Number(a.group.api.location.type !== 'grid') - Number(b.group.api.location.type !== 'grid') ||
+                a.rect.left - b.rect.left || a.rect.top - b.rect.top)
+            .flatMap(({group}) => group.panels.flatMap(panel => {
+                const target = views.get(panel.id)?.target;
+                return target && (id === undefined ? target.isStage : target.id === id) ?
+                    [{id: panel.id, title: panel.title}] : [];
+            }));
+    }
+
+    function selectFromList(id?: string) {
+        const first = targetTabs(id)[0];
+        if (first) activateView(first.id);
+        else {
+            const target = originalTargets().find(item => id === undefined ? item.isStage : item.id === id);
+            if (target) select(target.id);
+        }
     }
 
     function openDocument(request: DocumentPanelRequest) {
@@ -747,7 +810,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         dockview.getPanel(stagePanelId)?.api.close();
     }
 
-    function split(direction: SpriteSplitDirection, id = active?.id) {
+    function addView(direction: SpriteSplitDirection | 'within', id = active?.id) {
         const reference = views.get(id);
         if (!multiView || !reference) return;
         const section = reference === active && usesNativeSection(reference.section) ? options.getSection() : reference.section;
@@ -755,6 +818,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         activateView(panel.id);
         return panel.id;
     }
+
+    const split = (direction: SpriteSplitDirection, id?: string) => addView(direction, id);
+    const openInNewTab = (id: string) => addView('within', id);
 
     function closeSplit(id = active?.id) {
         const panel = dockview.getPanel(id);
@@ -805,7 +871,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         if (!docked) return;
         const panels: Record<string, PanelReference> = Object.create(null);
         for (const [id, view] of views) {
-            panels[id] = {kind: 'sprite', name: targetName(view.target), stage: view.target.isStage, section: view.section};
+            panels[id] = {kind: 'sprite', name: targetName(view.target), stage: view.target.isStage, section: view.section,
+                number: view.number};
         }
         if (dockview.getPanel(stagePanelId)) panels[stagePanelId] = {kind: 'stage'};
         const transient = new Set<string>();
@@ -864,8 +931,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             if (reference.kind === 'sprite') {
                 const target = targets.find(item => item.isStage === reference.stage && targetName(item) === reference.name);
                 if (!target || id === stagePanelId || !sectionAvailable(reference.section)) return finishRestore();
-                resolvedSprites.set(id, {id, target, section: reference.section, assets: createAssetSelections(target, locale)});
-                panels[id] = {id, title: tabTitle(target), contentComponent: 'sprite', params: {icon: getIcon(target)}};
+                resolvedSprites.set(id, {id, target, section: reference.section, number: reference.number,
+                    assets: createAssetSelections(target, locale)});
+                panels[id] = {id, contentComponent: 'sprite', params: {icon: getIcon(target)}};
             } else if (reference.kind === 'stage') {
                 if (!stagePane || id !== stagePanelId) return finishRestore();
                 panels[id] = {id, title: stagePane.title, contentComponent: stagePanelId, renderer: 'always'};
@@ -881,6 +949,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                 panels[id] = {id, title: documentPanelTitle(request), contentComponent: documentComponent, renderer: 'always'};
             }
         }
+        assignTabNumbers(resolvedSprites.values(), new Set([...targets.map(baseTitle),
+            ...Object.values(panels).map(panel => panel.title)]));
+        for (const [id, view] of resolvedSprites) panels[id].title = tabTitle(view);
         finishRestore();
         syncing = true;
         try {
@@ -923,10 +994,11 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                 if (!available.has(view.target)) dockview.getPanel(id)?.api.close();
             }
             const represented = new Set<Target>();
+            assignTabNumbers(views.values());
             for (const [id, view] of views) {
                 represented.add(view.target);
                 const panel = dockview.getPanel(id);
-                const title = tabTitle(view.target);
+                const title = tabTitle(view);
                 if (panel && panel.title !== title) panel.api.setTitle(title);
                 const icon = getIcon(view.target);
                 if (panel && panel.api.getParameters().icon !== icon) panel.api.updateParameters({icon});
@@ -995,7 +1067,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     vm.on('targetsUpdate', refresh);
     refresh();
     return {
-        select, openStage, closeStage, split, closeSplit, activateView, setViewSection, syncActiveSection, refreshSurfaces,
+        select, selectFromList, targetTabs, openStage, closeStage, split, closeSplit, activateView,
+        setViewSection, syncActiveSection, refreshSurfaces,
         rename(id: string) {
             const target = vm.runtime.targets.find(item => item.id === id);
             if (target) openRenameDialog(target);
@@ -1312,8 +1385,15 @@ export function useSpriteTabs<Snapshot>({available, enabled, locale, ...props}:
     }, [slots, props.activeSection]);
     const japanese = /^ja(?:-|$)/i.test(locale);
     const select = (id: string) => controller.current?.select(id);
+    const listTabs = enabled && props.multiView ? {
+        locale,
+        list: (id?: string) => controller.current?.targetTabs(id) ?? [],
+        select: (id?: string) => controller.current?.selectFromList(id),
+        activate: (id: string) => controller.current?.activateView(id)
+    } : null;
     return {
         controller,
+        listTabs,
         assetSelections: (enabled ? selection.assets : undefined) ?? defaultAssets,
         context: enabled ? {
             selectedId: selection.id, openLabel: japanese ? '開く' : 'Open', select, open: select,

@@ -90,3 +90,40 @@
     flex-direction: row;
     justify-content: flex-end;
 }
+.tw-plus-target-menu-icon {
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 0.45em;
+    vertical-align: -0.125em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.tw-plus-target-menu-button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+}
+
+.tw-plus-target-submenu-arrow {
+    float: inline-end;
+    margin-inline-start: 1em;
+}
+
+.tw-plus-target-submenu {
+    visibility: hidden;
+    opacity: 0;
+}
+
+.tw-plus-target-submenu.react-contextmenu--visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
