@@ -245,6 +245,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const editLabel = japanese ? 'クリックしてこのビューで編集' : 'Activate this view to edit';
     const backdropTitle = japanese ? '背景' : 'Backdrops';
     const tabTitle = (target: Target) => target.isStage ? backdropTitle : target.getName();
+    const chipText = japanese ?
+        {collapse: 'グループを折りたたむ', expand: 'グループを展開する', close: 'このグループのタブを閉じる', closeAll: 'この分割パネルの文書タブをすべて閉じる'} :
+        {collapse: 'Collapse group', expand: 'Expand group', close: 'Close the tabs of this group', closeAll: 'Close all document tabs of this split'};
     const slots = new Map<string, TabSlot>();
     const views = new Map<string, View<Snapshot>>();
     const documents = new Map<string, {request: DocumentPanelRequest; session?: ReturnType<DocumentPanelRequest['mount']>}>();
@@ -269,13 +272,28 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     /** Panels that were in a separate window when the layout was saved, until the user reopens them. */
     const reopenable = new Map<string, SavedPopout>();
     const originalTargets = () => vm.runtime.targets.filter(target => target.isOriginal);
+    // Whether tabs stand in a column at the left of each split. It is the user's preference, kept apart from the layout.
+    const tabsKey = persistence ? persistence.key + '.tabs' : undefined;
+    let verticalTabs = false;
+    try { verticalTabs = Boolean(tabsKey) && persistence.storage.getItem(tabsKey) === 'left'; } catch { /* Storage can be unavailable. */ }
 
     const dockview = createDockview(root, {
         theme: themeLight,
         disableFloatingGroups: true,
+        defaultHeaderPosition: verticalTabs ? 'left' : 'top',
         ...(multiView && {createRightHeaderActionComponent: createLayoutMenu}),
         defaultTabComponent: 'sprite',
         createTabComponent: () => new SpriteTab(document),
+        // A chip stands for several tabs, such as the changed scripts of one sprite, so it closes them together.
+        getTabGroupChipContextMenuItems: ({tabGroup, group}) => [
+            {label: tabGroup.collapsed ? chipText.expand : chipText.collapse, action: () => tabGroup.toggle()},
+            {label: chipText.close, action: () => {
+                for (const id of [...tabGroup.panelIds]) dockview.getPanel(id)?.api.close();
+            }},
+            {label: chipText.closeAll, action: () => {
+                for (const panel of [...group.panels]) if (documents.has(panel.id)) panel.api.close();
+            }}
+        ],
         getTabContextMenuItems: ({panel}) => {
             const target = views.get(panel.id)?.target;
             if (!target || target.isStage || !vm.renameSprite) return [];
@@ -392,6 +410,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             close: () => { if (group.activePanel) closeSplit(group.activePanel.id); },
             canClose: () => canCloseGroup(group),
             canSplit: () => views.has(group.activePanel?.id),
+            verticalTabs: () => verticalTabs,
+            setVerticalTabs,
             ...(popouts && {
                 canOpenPanel,
                 openPanel() {
@@ -424,6 +444,15 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             })
         });
         return {...menu, init() {}};
+    }
+
+    function setVerticalTabs(vertical: boolean) {
+        verticalTabs = vertical;
+        const position = vertical ? 'left' : 'top';
+        dockview.updateOptions({defaultHeaderPosition: position});
+        for (const group of dockview.groups) group.api.setHeaderPosition(position);
+        try { if (tabsKey) persistence.storage.setItem(tabsKey, position); } catch { /* Storage can be unavailable. */ }
+        refreshSurfaces();
     }
 
     const canRename = (target: Target) =>
@@ -640,7 +669,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         const {providerId, documentId} = request.reference;
         for (const [id, {request: opened}] of documents) {
             if (opened.reference.providerId === providerId && opened.reference.documentId === documentId) {
-                dockview.getPanel(id)?.api.setActive();
+                if (!request.inactive) dockview.getPanel(id)?.api.setActive();
                 return;
             }
         }
@@ -649,14 +678,39 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             id = 'document-view-' + ++nextView;
         } while (views.has(id) || documents.has(id) || vm.runtime.targets.some(target => target.id === id));
         const title = documentPanelTitle(request);
+        const position = documentPosition(request);
         documents.set(id, {request});
         try {
-            dockview.addPanel({id, title, component: documentComponent, renderer: 'always'});
+            dockview.addPanel({id, title, component: documentComponent, renderer: 'always',
+                inactive: request.inactive, ...(position && {position})});
         } catch (error) {
             documents.get(id)?.session?.dispose();
             documents.delete(id);
             throw error;
         }
+        if (request.tabGroup) joinTabGroup(id, request.tabGroup);
+    }
+
+    /** Where a document of an area opens: in the split that already shows its area, or in a new split beside the editor. */
+    function documentPosition({area}: DocumentPanelRequest) {
+        if (!area) return;
+        for (const [id, {request}] of documents) {
+            const panel = request.area === area && dockview.getPanel(id);
+            if (panel && panel.group.api.location.type === 'grid') return {referenceGroup: panel.group};
+        }
+        const reference = dockview.activePanel;
+        return reference && reference.group.api.location.type === 'grid' ?
+            {referencePanel: reference.id, direction: 'right' as const} : undefined;
+    }
+
+    function joinTabGroup(id: string, {id: key, label, color, collapsed}: NonNullable<DocumentPanelRequest['tabGroup']>) {
+        const panel = dockview.getPanel(id);
+        if (!panel) return;
+        const groupId = panel.group.id;
+        const existing = dockview.getTabGroups({groupId}).find(item => item.componentParams?.key === key);
+        const tabGroup = existing ?? dockview.createTabGroup({groupId, label, color, componentParams: {key}});
+        dockview.addPanelToTabGroup({groupId, tabGroupId: tabGroup.id, panelId: id});
+        if (!existing && collapsed) tabGroup.collapse();
     }
 
     function guardDocumentClose(event: MouseEvent | KeyboardEvent) {
