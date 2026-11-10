@@ -52,7 +52,26 @@ In the Plus standard layout, the left drawer shows the sprite list and backdrop.
 - The selected view is saved in `storage` under `<storageKey>.drawer` (`{"version": 1, "view": "project"}`), next to the split layout. A saved view the host does not supply falls back to the sprite list and comes back when the host supplies it again.
 - Without `drawerViews`, or with no supported views and no `agents`, the drawer is unchanged: no bar and no extra element around the sprite list. Supply the views from startup; adding the first one later remounts the GUI's target pane once.
 
-Use `/example/?standard=1&drawer=1&lang=ja` in the test host to try the bar with sample views.
+Use `/example/?standard=1&drawer=1&lang=ja` in the test host to try the bar with sample views and the package's AI agent menu.
+
+### AI agent menu and settings
+
+`@kubohiroya/turbowarp-plus-editor-workbench/ai-agents` supplies the menu for button 4 and its settings dialog:
+
+```tsx
+import styles from '@kubohiroya/turbowarp-plus-editor-workbench/editor.css';
+import {createAiAgents} from '@kubohiroya/turbowarp-plus-editor-workbench/ai-agents';
+
+const aiAgents = createAiAgents(React, {styles});
+<StandardLayout {...props} drawerViews={{views, agents: aiAgents.drawerMenu}} />
+// Anywhere else, for example a settings menu entry with aiAgents.settingsIcon():
+aiAgents.openSettings({locale, returnFocus: trigger});
+```
+
+- The menu lists the turned-on services, each with an icon and its name, then a separator and "AI エージェント設定…" / "AI agent settings…". Without turned-on services it shows only that item and a short hint. Arrow keys, Home and End move between the items. Choosing a service opens its address with `window.open(url, '_blank', 'noopener,noreferrer')`.
+- The presets are ChatGPT (`https://chatgpt.com/`) and Claude (`https://claude.ai/new`). Each can be turned off, and its address replaced by a deep link such as a previous conversation; an empty address means the default. The user can add and remove services of their own (name and address). Only `https:` addresses are accepted; anything else shows an error under the field. The icons are generic: a chat bubble with an initial for a preset, a globe for the user's own service. No service logos are used.
+- The dialog (`role="dialog"`, `aria-modal`) is plain DOM, so it can be opened without React (`openAgentSettingsDialog`). It focuses its first field, keeps Tab inside, closes on Escape or Cancel without saving, and returns focus to `returnFocus` or to the element focused before.
+- The settings are saved in `localStorage` under `twPlusAiAgents` as `{"version": 1, "services": [...]}`. Each service has a `target` of `kind: "url"`; other kinds are left for later and ignored for now. Missing, broken or invalid data falls back entry by entry to the presets.
 
 ## Verification
 

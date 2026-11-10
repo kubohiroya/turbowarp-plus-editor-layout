@@ -34,6 +34,10 @@
       "default": "./dist/debugger-panel.js"
     },
     "./debugger-panel.css": "./src/debugger-panel.css",
+    "./ai-agents": {
+      "types": "./dist/ai-agents.d.ts",
+      "default": "./dist/ai-agents.js"
+    },
     "./extension-file-menu": {
       "types": "./dist/extension-file-menu.d.ts",
       "default": "./dist/extension-file-menu.js"
