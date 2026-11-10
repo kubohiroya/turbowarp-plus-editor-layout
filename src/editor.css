@@ -631,6 +631,92 @@ details.layout-menu button {
     font: inherit;
 }
 
+.drawer-view-bar {
+    position: relative;
+    display: grid;
+    flex: none;
+    /* One row as long as the drawer is wide enough; the buttons wrap only when it is too narrow. */
+    grid-template-columns: repeat(auto-fit, minmax(1.375rem, 1fr));
+    gap: 0.125rem;
+    padding-block-end: 0.25rem;
+    margin-block-end: 0.25rem;
+    border-block-end: 1px solid var(--ui-black-transparent);
+}
+
+.drawer-view-bar button {
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    min-block-size: 1.75rem;
+    padding: 0.125rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.drawer-view-bar button:hover,
+.drawer-view-bar button:focus-visible {
+    border-color: var(--ui-black-transparent);
+    background: var(--ui-secondary);
+}
+
+.drawer-view-bar button[aria-pressed="true"],
+.drawer-view-bar button[aria-expanded="true"] {
+    border-color: var(--looks-secondary, #855cd6);
+    background: var(--ui-secondary);
+    color: var(--looks-secondary, #855cd6);
+}
+
+.drawer-view-bar svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+}
+
+.drawer-agents {
+    display: contents;
+}
+
+.drawer-agents-menu {
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline-start: 0;
+    z-index: 120;
+    min-inline-size: 12rem;
+    padding: 0.25rem;
+    border: 1px solid var(--ui-black-transparent);
+    border-radius: 0.25rem;
+    background: var(--ui-white, #fff);
+    color: var(--text-primary);
+    box-shadow: 0 0.125rem 0.5rem var(--ui-black-transparent);
+}
+
+.drawer-view-tools {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-evenly;
+    padding-block: 0.125rem;
+}
+
+.drawer-sprites {
+    display: contents;
+}
+
+.drawer-sprites[hidden] {
+    display: none;
+}
+
+.drawer-view-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+    min-inline-size: 0;
+    overflow: auto;
+}
+
 .drawer-pin {
     flex: none;
     opacity: 0.55;

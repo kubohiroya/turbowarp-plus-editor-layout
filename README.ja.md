@@ -29,6 +29,29 @@ Scratch 配置では分割を既定で有効にする。既存のステージサ
 
 Editor はこのパッケージを npm から固定して使う。
 
+## 左側ドロワーの表示
+
+Plus 標準配置の左側ドロワーは、スプライト一覧と背景を表示する。ホストは `StandardLayout` に `drawerViews` を渡して、表示する内容を足せる。
+
+```js
+<StandardLayout {...props} storage={localStorage} storageKey="twPlusEditorLayout" drawerViews={{
+    views: [
+        {id: 'project', render: ({locale}) => <ProjectExplorer locale={locale} />, tools: ({locale}) => <ExplorerTools />},
+        {id: 'git-history', label: 'Git 履歴', icon: <HistoryIcon />, render: () => <GitHistory />}
+    ],
+    agents: {renderMenu: ({locale, close}) => <div role="menu">…</div>}
+}} />
+```
+
+- ドロワーの最上部に、アイコンだけのボタンを 1 行に並べたもの（ドロワーが狭すぎるときだけ折り返す）（`role="toolbar"`、「ドロワーの表示」）が出る。1 スプライト一覧、2 プロジェクトフォルダ、3 Git 履歴、4 AI エージェント。それぞれ日本語か英語の `aria-label` と `title` を持つ。ボタンは、ホストが渡したものだけを出す。スプライト一覧は常に先頭にある。
+- 1〜3 は内容を切り替え、選択中のボタンを `aria-pressed` で示す。矢印キーでボタンの間を移る（Tab で止まるのは 1 つ。左右は端で反対側に回り、Home と End は両端へ移る）。Enter と Space で選ぶ。
+- `id` は `project` か `git-history`。知らない `id` と、重なった `id` は無視する。`label` と `icon` を省くと、パッケージの名前と、`currentColor` で描く 16 px のアイコンを使う。`render` は選択中だけ呼ぶ。`tools` は、スプライト一覧の検索・ピン・アンドックと同じ位置に出す。検索とアンドックは、スプライト一覧を選んでいるときだけ出る。ピン留めはドロワーそのものの操作なので、どの内容でも出す。ほかの内容を出している間も、GUI の対象ペインは隠したまま残す。
+- 4 はメニューを開くボタン（`aria-haspopup="menu"`、`aria-expanded`）。`renderMenu` がメニューの中身を描く。ふつうは `role="menu"` の要素 1 つと、その中の `menuitem` にする。開くと最初の項目に移る。Escape、外側の押下、`close()` で閉じ、ボタンに戻る。ドロワーの内容は切り替えない。
+- 選んだ内容は、分割レイアウトと同じ `storage` の `<storageKey>.drawer`（`{"version": 1, "view": "project"}`）に保存する。保存した内容をホストが渡していないときはスプライト一覧に戻り、ホストがまた渡すと復元する。
+- `drawerViews` がないとき、または使える内容も `agents` もないときは、ドロワーは変わらない。ボタンを出さず、スプライト一覧を囲む要素も足さない。内容は起動時から渡す。後から最初の内容を足すと、GUI の対象ペインを 1 度作り直す。
+
+試験用ホストの `/example/?standard=1&drawer=1&lang=ja` で、見本の内容を入れたボタンを試せる。
+
 ## 検証
 
 `npm test` で配分・縦横比・設定の読み書きを、`npm run test:browser` で独立した試験用ホストを検証する。試験用ホストを手動で開くには、このディレクトリで `npm install` と `python3 -m http.server` を実行し、`/example/` を表示する。

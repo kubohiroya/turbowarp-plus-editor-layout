@@ -122,3 +122,56 @@ test('the sprite layout menu opens above a clipped tab strip and supports keyboa
     await expect(trigger).toBeFocused();
     await expect(page.getByRole('menu')).toHaveCount(0);
 });
+
+test('the drawer bar switches host views, keeps the choice and opens the agent menu', {timeout: 30_000}, async t => {
+    const page = await openExample(t);
+    await page.goto(origin + example + '?standard=1&drawer=1&lang=ja');
+    const bar = page.getByRole('toolbar', {name: 'ドロワーの表示'});
+    const sprites = bar.getByRole('button', {name: 'スプライト一覧', exact: true});
+    const project = bar.getByRole('button', {name: 'プロジェクトフォルダ'});
+    const agents = bar.getByRole('button', {name: 'AI エージェント'});
+    const spriteTools = page.getByRole('group', {name: 'スプライト一覧の操作'});
+    await expect(sprites).toHaveAttribute('aria-pressed', 'true');
+    await expect(spriteTools).toBeVisible();
+    const boxes = await Promise.all([sprites, project, bar.getByRole('button', {name: 'Git 履歴'}), agents]
+        .map(button => button.boundingBox()));
+    assert.ok(boxes.every(box => box.y === boxes[0].y), 'one row');
+    assert.ok(boxes.every((box, index) => index === 0 || box.x > boxes[index - 1].x), 'in order');
+    assert.ok(boxes.every(box => box.x >= 0 && box.x + box.width <= 120), 'inside the drawer');
+    const screenshot = process.env.DRAWER_BAR_SCREENSHOT;
+    if (screenshot) {
+        const clip = {x: 0, y: 0, width: 360, height: 220};
+        await page.screenshot({path: screenshot, clip});
+        await agents.click();
+        await expect(page.getByRole('menuitem', {name: 'ChatGPT'})).toBeFocused();
+        await page.screenshot({path: screenshot.replace(/\.png$/, '-menu.png'), clip});
+        await page.keyboard.press('Escape');
+    }
+
+    await sprites.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(project).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(project).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('list', {name: 'プロジェクトのファイル'})).toBeVisible();
+    await expect(spriteTools).toBeHidden();
+    await expect(page.getByRole('button', {name: '更新'})).toBeVisible();
+    const barWidth = async () => (await bar.boundingBox()).width;
+    await expect.poll(barWidth, {message: 'the other views open the drawer wider'}).toBeGreaterThan(250);
+    await sprites.click();
+    await expect.poll(barWidth, {message: 'and the sprite list keeps its narrow width'}).toBeLessThan(120);
+    await project.click();
+    await expect.poll(barWidth).toBeGreaterThan(250);
+    await page.reload();
+    await expect(project).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('list', {name: 'プロジェクトのファイル'})).toBeVisible();
+
+    await agents.focus();
+    await page.keyboard.press('Space');
+    await expect(agents).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('menuitem', {name: 'ChatGPT'})).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(agents).toBeFocused();
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(project).toHaveAttribute('aria-pressed', 'true');
+});
