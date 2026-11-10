@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import test, {type TestContext} from 'node:test';
 import {JSDOM} from 'jsdom';
-import {mountSpriteTabs} from '../dist/sprite-tabs.js';
+import {getDocumentWorkspace, mountSpriteTabs} from '../dist/sprite-tabs.js';
 
 function setupDom(t: TestContext) {
     const dom = new JSDOM('<main></main>', {pretendToBeVisual: true});
@@ -10,6 +10,9 @@ function setupDom(t: TestContext) {
         window: dom.window,
         document: dom.window.document,
         Node: dom.window.Node,
+        // Panels that stay rendered while hidden are placed by dockview on animation frames.
+        requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window),
+        cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window),
         ResizeObserver: class {
             observe() {}
             unobserve() {}
@@ -320,6 +323,95 @@ test('returning the active view to a native section hides the variables and mess
                 assert.equal(pane().hidden, true, `${kind} pane stays visible after section ${native}`);
             }
         }
+    } finally {
+        controller.dispose();
+    }
+});
+
+test('documents of one area open in their own split, gathered under tab groups', async t => {
+    const document = setupDom(t);
+    const sprite = {id: 'sprite', isOriginal: true, isStage: false, getName: () => 'Sprite',
+        getCurrentCostume: () => ({asset: {encodeDataURI: () => '/sprite.svg'}})};
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [sprite]}, editingTarget: sprite});
+    const root = document.querySelector('main');
+    const controller = mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen'
+    });
+    const mounted: string[] = [];
+    const request = (documentId: string, tabGroup?: {id: string; label: string; color?: string}, area = 'diff') => ({
+        reference: {providerId: 'test', documentId}, filename: documentId, title: documentId, transient: true,
+        area, tabGroup, inactive: documentId !== 'first',
+        mount(element: HTMLElement) {
+            mounted.push(documentId);
+            element.textContent = documentId;
+            return {requestClose() {}, dispose() {}};
+        }
+    });
+    try {
+        const workspace = getDocumentWorkspace(vm);
+        const stage = {id: 'stage', label: 'Stage', color: 'blue'};
+        const cat = {id: 'cat', label: 'Cat', color: 'green'};
+        workspace.open(request('first', stage));
+        workspace.open(request('second', stage));
+        workspace.open(request('third', cat));
+        workspace.open(request('overview'));
+        assert.deepEqual(mounted, ['first', 'second', 'third', 'overview']);
+        const groups = [...root.querySelectorAll('.dv-groupview')];
+        assert.equal(groups.length, 2, 'the area opens one split beside the sprite tabs');
+        const tabs = (group: Element) => [...group.querySelectorAll('.dv-tab')].map(tab => tab.textContent);
+        assert.deepEqual(tabs(groups[0]), ['Sprite']);
+        assert.ok(tabs(groups[1]).join().includes('first'));
+        assert.equal(groups[1].querySelectorAll('.dv-tab').length, 4);
+        // dockview draws the chips once the tab groups settle, after the current task.
+        await Promise.resolve();
+        const chips = [...groups[1].querySelectorAll('.dv-tab-group-chip')].map(chip => chip.textContent);
+        assert.deepEqual(chips, ['Stage', 'Cat']);
+        // The first tab of the area is the one brought forward; the others wait behind it.
+        assert.equal(groups[1].querySelector('.dv-active-tab')?.textContent, 'first');
+        // A document of another area opens in another split.
+        workspace.open(request('elsewhere', undefined, 'other'));
+        assert.equal(root.querySelectorAll('.dv-groupview').length, 3);
+    } finally {
+        controller.dispose();
+    }
+});
+
+test('the layout menu stands the tabs of every split in a column and remembers the choice', t => {
+    const document = setupDom(t);
+    const sprite = {id: 'sprite', isOriginal: true, isStage: false, getName: () => 'Sprite',
+        getCurrentCostume: () => ({asset: {encodeDataURI: () => '/sprite.svg'}})};
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [sprite]}, editingTarget: sprite});
+    const root = document.querySelector('main');
+    const saved = new Map<string, string>();
+    const storage = {getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => { saved.set(key, value); }};
+    const mount = () => mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, locale: 'ja', getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {},
+        reopenLabel: 'Reopen', layoutStorage: {storage, key: 'layout'}
+    });
+    const item = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.tw-plus-sprite-layout-menu-popup button')]
+        .find(button => button.textContent === label);
+    const openMenu = () => root.querySelector<HTMLButtonElement>('.tw-plus-sprite-layout-menu-trigger').click();
+    const positions = () => [...root.querySelectorAll('.dv-groupview')].map(group =>
+        group.classList.contains('dv-groupview-header-left') ? 'left' : 'top');
+    let controller = mount();
+    try {
+        controller.split('right');
+        openMenu();
+        assert.ok(item('タブを垂直に並べて表示'));
+        assert.equal(item('タブを水平に並べて表示'), undefined);
+        item('タブを垂直に並べて表示').click();
+        assert.equal(saved.get('layout.tabs'), 'left');
+        assert.deepEqual(positions(), ['left', 'left']);
+        openMenu();
+        assert.ok(item('タブを水平に並べて表示'), 'the item names the arrangement it switches to');
+        document.body.dispatchEvent(new document.defaultView.Event('pointerdown', {bubbles: true}));
+    } finally {
+        controller.dispose();
+    }
+    root.replaceChildren();
+    controller = mount();
+    try {
+        assert.ok(positions().every(position => position === 'left'), 'a new workspace keeps the column');
     } finally {
         controller.dispose();
     }

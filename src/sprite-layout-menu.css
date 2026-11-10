@@ -56,3 +56,37 @@
 .tw-plus-sprite-layout-menu-popup button:enabled:is(:hover, :focus-visible) {
     background: var(--looks-light-transparent, #e6dff3);
 }
+
+/*
+ * "Show tabs vertically" stands the tabs of a split in a column at its left. dockview turns each tab on its side;
+ * here the column is a list of rows instead, so titles and tab group chips read as they do in a row.
+ */
+.dv-groupview-header-left > .dv-tabs-and-actions-container.dv-groupview-header-vertical {
+    width: var(--tw-plus-vertical-tabs-width, 180px);
+    border-inline-end: 1px solid var(--ui-black-transparent, #c6cfda);
+}
+.dv-groupview-header-left .dv-tabs-container.dv-tabs-container-vertical {
+    flex-direction: column;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    writing-mode: horizontal-tb;
+}
+.dv-groupview-header-left .dv-tabs-container-vertical > .dv-tab {
+    box-sizing: border-box;
+    width: 100%;
+    padding-inline: 8px 4px;
+}
+.dv-groupview-header-left .dv-tabs-container-vertical > .dv-tab .dv-default-tab-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dv-groupview-header-left .dv-tabs-container-vertical > .dv-tab-group-chip {
+    align-self: flex-start;
+    margin: 6px 4px 2px;
+}
+.dv-groupview-header-left .dv-right-actions-container-vertical {
+    flex-direction: row;
+    justify-content: flex-end;
+}

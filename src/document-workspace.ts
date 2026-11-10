@@ -4,6 +4,18 @@ export interface DocumentPanelRequest {
     /** What the tab shows. Without it the tab names the file and where it comes from. */
     title?: string;
     transient?: boolean;
+    /**
+     * Opens the tab beside the other open tabs of the same area, in one split panel. The first tab of an area
+     * opens in a new split to the right of the active panel, so the area does not mix with the sprite tabs.
+     */
+    area?: string;
+    /**
+     * Gathers the tab under a labelled chip with the other tabs of the same `id` in its split panel.
+     * `color` is a palette id of the workspace, such as `'green'`, `'red'` or `'blue'`.
+     */
+    tabGroup?: {id: string; label: string; color?: string; collapsed?: boolean};
+    /** Opens the tab behind the active one, as when many tabs are opened at once. */
+    inactive?: boolean;
     mount(element: HTMLElement, close: () => void): {requestClose(): void; dispose(): void};
 }
 

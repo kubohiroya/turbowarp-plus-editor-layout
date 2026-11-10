@@ -8,13 +8,16 @@ interface SpriteLayoutCommands {
     canOpenPanel?(): boolean;
     openPalette?(): void;
     canOpenPalette?(): boolean;
+    /** Whether the tabs stand in a column at the left of each split panel instead of a row above it. */
+    verticalTabs?(): boolean;
+    setVerticalTabs?(vertical: boolean): void;
 }
 
 const labels = {
     ja: ['編集パネルのレイアウト', 'パネルを横に分割', 'パネルを縦に分割', 'この分割パネルを閉じる',
-        'パネルを別画面で開く', 'ブロックパレットを別画面で開く'],
+        'パネルを別画面で開く', 'ブロックパレットを別画面で開く', 'タブを垂直に並べて表示', 'タブを水平に並べて表示'],
     en: ['Editor panel layout', 'Split right', 'Split below', 'Close this split',
-        'Open panel in another window', 'Open block palette in another window']
+        'Open panel in another window', 'Open block palette in another window', 'Show tabs vertically', 'Show tabs horizontally']
 };
 
 function createIcon(document: Document, path: string) {
@@ -34,7 +37,7 @@ function createIcon(document: Document, path: string) {
 }
 
 export function createSpriteLayoutMenu(document: Document, locale: string, commands: SpriteLayoutCommands) {
-    const [title, right, below, closeLabel, panelLabel, paletteLabel] = /^ja(?:-|$)/i.test(locale) ? labels.ja : labels.en;
+    const [title, right, below, closeLabel, panelLabel, paletteLabel, verticalLabel, horizontalLabel] = /^ja(?:-|$)/i.test(locale) ? labels.ja : labels.en;
     const element = document.createElement('div');
     element.className = 'tw-plus-sprite-layout-menu';
     const trigger = document.createElement('button');
@@ -57,20 +60,33 @@ export function createSpriteLayoutMenu(document: Document, locale: string, comma
         {label: closeLabel, run: commands.close, enabled: commands.canClose, path: 'm4.5 4.5 7 7m0-7-7 7'},
         {label: panelLabel, run: commands.openPanel, enabled: commands.canOpenPanel, path: 'M7 3H3v10h10V9m-5-1 5-5m-4 0h4v4'},
         {label: paletteLabel, run: commands.openPalette, enabled: commands.canOpenPalette,
-            path: 'M7 4H3v3h2v2H3v3h7v-2h2V9m-3-2 4-4m-3 0h3v3'}
+            path: 'M7 4H3v3h2v2H3v3h7v-2h2V9m-3-2 4-4m-3 0h3v3'},
+        ...(commands.verticalTabs && commands.setVerticalTabs ? [{
+            label: verticalLabel, run: () => commands.setVerticalTabs!(!commands.verticalTabs!()),
+            path: 'M2.5 3.5h11v9h-11zM6 3.5v9M2.5 6h3.5m-3.5 2.5h3.5',
+            // The item names the arrangement it switches to.
+            current: () => commands.verticalTabs!() ?
+                {label: horizontalLabel, path: 'M2.5 3.5h11v9h-11zM2.5 6.5h11M6 3.5v3m3.5-3v3'} : undefined
+        }] : [])
     ];
-    const entries = items.flatMap(({label, run, enabled, path}) => {
+    const entries = items.flatMap(({label, run, enabled, path, current}: typeof items[number] & {
+        current?(): {label: string; path: string} | undefined;
+    }) => {
         if (!run) return [];
         const item = document.createElement('button');
         item.type = 'button';
-        item.append(createIcon(document, path), label);
+        const render = () => {
+            const shown = current?.() ?? {label, path};
+            item.replaceChildren(createIcon(document, shown.path), shown.label);
+        };
+        render();
         item.tabIndex = -1;
         item.setAttribute('role', 'menuitem');
         item.addEventListener('click', () => {
             close(true);
             run();
         });
-        return [{item, enabled}];
+        return [{item, enabled, render: current && render}];
     });
     const buttons = entries.map(({item}) => item);
     popup.append(...buttons);
@@ -95,7 +111,10 @@ export function createSpriteLayoutMenu(document: Document, locale: string, comma
     function open(last = false) {
         if (openedIn) return;
         openedIn = trigger.ownerDocument;
-        for (const {item, enabled} of entries) item.disabled = enabled?.() === false;
+        for (const {item, enabled, render} of entries) {
+            item.disabled = enabled?.() === false;
+            render?.();
+        }
         topLayer = typeof popup.showPopover === 'function';
         if (topLayer) {
             popup.setAttribute('popover', 'manual');
