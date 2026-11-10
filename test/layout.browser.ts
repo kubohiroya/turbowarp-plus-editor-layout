@@ -122,3 +122,102 @@ test('the sprite layout menu opens above a clipped tab strip and supports keyboa
     await expect(trigger).toBeFocused();
     await expect(page.getByRole('menu')).toHaveCount(0);
 });
+
+test('the drawer bar switches host views, keeps the choice and opens the agent menu', {timeout: 30_000}, async t => {
+    const page = await openExample(t);
+    await page.goto(origin + example + '?standard=1&drawer=1&lang=ja');
+    const bar = page.getByRole('toolbar', {name: 'ドロワーの表示'});
+    const sprites = bar.getByRole('button', {name: 'スプライト一覧', exact: true});
+    const project = bar.getByRole('button', {name: 'プロジェクトフォルダ'});
+    const agents = bar.getByRole('button', {name: 'AI エージェント'});
+    const spriteTools = page.getByRole('group', {name: 'スプライト一覧の操作'});
+    await expect(sprites).toHaveAttribute('aria-pressed', 'true');
+    await expect(spriteTools).toBeVisible();
+    const boxes = await Promise.all([sprites, project, bar.getByRole('button', {name: 'Git 履歴'}), agents]
+        .map(button => button.boundingBox()));
+    assert.ok(boxes.every(box => box.y === boxes[0].y), 'one row');
+    assert.ok(boxes.every((box, index) => index === 0 || box.x > boxes[index - 1].x), 'in order');
+    assert.ok(boxes.every(box => box.x >= 0 && box.x + box.width <= 120), 'inside the drawer');
+    const screenshot = process.env.DRAWER_BAR_SCREENSHOT;
+    if (screenshot) {
+        const clip = {x: 0, y: 0, width: 360, height: 220};
+        await page.screenshot({path: screenshot, clip});
+        await agents.click();
+        await expect(page.getByRole('menuitem', {name: 'ChatGPT'})).toBeFocused();
+        await page.screenshot({path: screenshot.replace(/\.png$/, '-menu.png'), clip});
+        await page.keyboard.press('Escape');
+    }
+
+    await sprites.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(project).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(project).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('list', {name: 'プロジェクトのファイル'})).toBeVisible();
+    await expect(spriteTools).toBeHidden();
+    await expect(page.getByRole('button', {name: '更新'})).toBeVisible();
+    const barWidth = async () => (await bar.boundingBox()).width;
+    await expect.poll(barWidth, {message: 'the other views open the drawer wider'}).toBeGreaterThan(250);
+    await sprites.click();
+    await expect.poll(barWidth, {message: 'and the sprite list keeps its narrow width'}).toBeLessThan(120);
+    await project.click();
+    await expect.poll(barWidth).toBeGreaterThan(250);
+    await page.reload();
+    await expect(project).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('list', {name: 'プロジェクトのファイル'})).toBeVisible();
+
+    await agents.focus();
+    await page.keyboard.press('Space');
+    await expect(agents).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('menuitem', {name: 'ChatGPT'})).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(agents).toBeFocused();
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(project).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the AI agent menu opens services and the settings dialog saves the user\'s own service', {timeout: 30_000}, async t => {
+    const page = await openExample(t);
+    await page.goto(origin + example + '?standard=1&drawer=1&lang=ja');
+    const agents = page.getByRole('toolbar', {name: 'ドロワーの表示'}).getByRole('button', {name: 'AI エージェント'});
+    const menu = page.getByRole('menu', {name: 'AI エージェント'});
+    await agents.click();
+    await expect(menu.getByRole('menuitem')).toHaveText(['ChatGPT', 'Claude', 'AI エージェント設定…']);
+    await expect(menu.getByRole('separator')).toHaveCount(1);
+    await page.keyboard.press('ArrowDown');
+    await expect(menu.getByRole('menuitem', {name: 'Claude'})).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('html')).toHaveAttribute('data-agent', 'https://claude.ai/new');
+    await expect(menu).toHaveCount(0);
+    await expect(agents).toBeFocused();
+
+    await agents.click();
+    await menu.getByRole('menuitem', {name: 'AI エージェント設定…'}).click();
+    const dialog = page.getByRole('dialog', {name: 'AI エージェント設定'});
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('ChatGPT をメニューに出す')).toBeFocused();
+    await dialog.getByLabel('ChatGPT をメニューに出す').uncheck();
+    await dialog.getByRole('button', {name: 'サービスを追加'}).click();
+    const row = dialog.getByRole('group', {name: '追加したサービス 1'});
+    await expect(row.getByLabel('名前')).toBeFocused();
+    await row.getByLabel('名前').fill('前回の会話');
+    await row.getByLabel('URL').fill('http://chatgpt.com/c/1');
+    await dialog.getByRole('button', {name: '保存'}).click();
+    await expect(row.getByText('https: で始まるアドレスだけを使えます。')).toBeVisible();
+    await expect(row.getByLabel('URL')).toBeFocused();
+    await row.getByLabel('URL').fill('https://chatgpt.com/c/1');
+    await dialog.getByRole('button', {name: '保存'}).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(agents).toBeFocused();
+
+    await page.reload();
+    await agents.click();
+    await expect(menu.getByRole('menuitem')).toHaveText(['Claude', '前回の会話', 'AI エージェント設定…']);
+    await menu.getByRole('menuitem', {name: '前回の会話'}).click();
+    await expect(page.locator('html')).toHaveAttribute('data-agent', 'https://chatgpt.com/c/1');
+    await agents.click();
+    await menu.getByRole('menuitem', {name: 'AI エージェント設定…'}).click();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(agents).toBeFocused();
+});

@@ -1,8 +1,16 @@
 import {createLayout, createSplitter, splitAxis} from './index.ts';
 import {createTargetList} from './targets.ts';
+import type {DrawerViews} from './drawer-views.ts';
+import {availableDrawerViews, createDrawerViewBar, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
+
+export type {DrawerMenu, DrawerMenuRenderProps, DrawerRenderProps, DrawerView, DrawerViewId, DrawerViews,
+    HostDrawerViewId} from './drawer-views.ts';
 
 const isJapanese = locale => /^ja(?:-|$)/i.test(locale);
 const singleColumnTargetWidth = 108;
+// Views other than the sprite list show file names and commit subjects, so the drawer opens wider for them.
+const drawerViewWidth = 300;
+const minimumDrawerViewWidth = 160;
 const minimumStandardEditor = 380;
 
 export function createStandardLayout(React, {styles, targetStyles, context, LayoutMenu}) {
@@ -10,12 +18,13 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     const SplitLayout = createLayout(React);
     const Splitter = createSplitter(React);
     const targets = createTargetList(React, targetStyles);
+    const DrawerViewBar = createDrawerViewBar(React, styles);
     const targetSearch = React.createContext('');
     const targetTools = React.createContext(null);
 
     function StandardLayout({
         enabled, splitter, windowLayout, stageActionEnabled, stageDrawer = false,
-        onPaletteModeChange, windowTools, Container, render, ...props
+        onPaletteModeChange, windowTools, Container, render, drawerViews = undefined as DrawerViews | undefined, ...props
     }) {
         const [showUndock, setShowUndock] = useState(false);
         const [targetsPinned, setTargetsPinned] = useState(true);
@@ -23,8 +32,17 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const [stageDrawerOpen, setStageDrawerOpen] = useState(false);
         const [size, setSize] = useState(null);
         const [targetRatio, setTargetRatio] = useState(null);
+        const [viewRatio, setViewRatio] = useState(null);
         const [preferredStageWidth, setPreferredStageWidth] = useState(null);
         const [stageActionMount, setStageActionMount] = useState(null);
+        const [preferredDrawerView, setPreferredDrawerView] = useState(() => readDrawerView(props.storage, props.storageKey));
+        const hostDrawerViews = availableDrawerViews(drawerViews);
+        // A view saved earlier comes back once the host supplies it again.
+        const drawerView = hostDrawerViews.some(view => view.id === preferredDrawerView) ? preferredDrawerView : 'sprites';
+        const selectDrawerView = view => {
+            setPreferredDrawerView(view);
+            writeDrawerView(props.storage, props.storageKey, view);
+        };
         const body = useRef(null);
         const plusLayout = enabled && !props.fullscreen;
         const stageHidden = plusLayout && !showStage;
@@ -48,11 +66,16 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const stageTools = stageActionEnabled &&
             element('span', {className: styles.stageActionSlot, ref: setStageActionMount});
         const bodyWidth = size?.width ?? 1024;
-        const targetSplit = plusLayout && splitter && size ? splitAxis(
-            bodyWidth, targetRatio, singleColumnTargetWidth, singleColumnTargetWidth, minimumStandardEditor
+        // The sprite list and the other views keep their own widths, so widening one leaves the other as it was.
+        const wideDrawer = plusLayout && drawerView !== 'sprites';
+        const targetSplit = plusLayout && splitter && size ? (wideDrawer ?
+            splitAxis(bodyWidth, viewRatio, drawerViewWidth, minimumDrawerViewWidth, minimumStandardEditor) :
+            splitAxis(bodyWidth, targetRatio, singleColumnTargetWidth, singleColumnTargetWidth, minimumStandardEditor)
         ) : null;
+        const fixedDrawerWidth = Math.max(singleColumnTargetWidth, Math.min(drawerViewWidth, Math.floor(bodyWidth / 2)));
         const resizable = targetSplit && targetSplit.maximum > targetSplit.minimum;
-        const editorSpace = targetsPinned ? (targetSplit?.second ?? bodyWidth - singleColumnTargetWidth) : bodyWidth;
+        const editorSpace = targetsPinned ?
+            (targetSplit?.second ?? bodyWidth - (wideDrawer ? fixedDrawerWidth : singleColumnTargetWidth)) : bodyWidth;
         const maximumStageWidth = Math.max(1, Math.floor(Math.min(editorSpace - 24,
             ((size?.height ?? 640) - 112) * props.stageAspect)));
         const defaultStageWidth = Math.min(maximumStageWidth, Math.floor(Math.min(props.defaultStageWidth, 360, bodyWidth / 2)));
@@ -105,13 +128,17 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (resizable) {
                 bodyStyle['--plus-target-width'] = `${targetSplit.first}px`;
                 bodyStyle['--plus-target-divider-width'] = `${size.width - targetSplit.available}px`;
+            } else if (wideDrawer) {
+                bodyStyle['--plus-target-width'] = `${fixedDrawerWidth}px`;
             }
             // The target list is on the physical left in both text directions.
             const columnSplitter = targetsPinned && resizable ? element(Splitter, {
                 axis: 'columns', split: targetSplit,
-                label: japanese ? 'スプライト一覧と編集領域の幅' : 'Sprite list and editor width',
+                label: wideDrawer ? (japanese ? 'ドロワーと編集領域の幅' : 'Drawer and editor width') :
+                    japanese ? 'スプライト一覧と編集領域の幅' : 'Sprite list and editor width',
                 className: `${styles.separator} ${styles.standardSeparator}`,
-                onChange: setTargetRatio, onReset: () => setTargetRatio(null)
+                onChange: wideDrawer ? setViewRatio : setTargetRatio,
+                onReset: () => (wideDrawer ? setViewRatio : setTargetRatio)(null)
             }) : null;
             return {
                 ...shared,
@@ -146,7 +173,8 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         });
         return element(context.Provider, {value: {
             showUndock, plusLayout, targetsPinned, setTargetsPinned, stageHidden, setStageVisible: setShowStage, stageResize, stageActionMount,
-            stageDrawer: plusLayout && stageDrawer, setStageDrawerOpen, locale: props.locale
+            stageDrawer: plusLayout && stageDrawer, setStageDrawerOpen, locale: props.locale,
+            drawerViews, drawerView, selectDrawerView
         }},
             Container ? element(Container, {locale: props.locale}, layout) : layout);
     }
@@ -256,13 +284,30 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     }
 
     function TargetLayout({compact, render}) {
-        const {plusLayout, targetsPinned, locale} = useContext(context);
+        const {plusLayout, targetsPinned, locale, drawerViews, drawerView = 'sprites', selectDrawerView} = useContext(context);
         const tools = useState(null);
         const panel = render(plusLayout || compact);
-        return plusLayout ? element(EdgeDrawer, {
+        if (!plusLayout) return panel;
+        const content = element(targetTools.Provider, {value: tools}, panel);
+        const drawer = children => element(EdgeDrawer, {
             edge: 'left', pinned: targetsPinned,
             label: isJapanese(locale) ? 'スプライト一覧を展開' : 'Reveal sprite list'
-        }, element(targetTools.Provider, {value: tools}, panel)) : panel;
+        }, children);
+        // Without host views the drawer keeps the sprite list as its only, unwrapped content.
+        if (!hasDrawerBar(drawerViews)) return drawer(content);
+        const views = availableDrawerViews(drawerViews);
+        const active = views.find(view => view.id === drawerView);
+        return drawer(element(React.Fragment, null,
+            element(DrawerViewBar, {locale, views, agents: drawerViews.agents, selected: active ? active.id : 'sprites',
+                onSelect: selectDrawerView}),
+            // Pinning belongs to the drawer, so every view keeps the pin button the sprite list shows.
+            active && element('div', {className: styles.drawerViewTools},
+                active.tools?.({locale}),
+                element(DrawerPinButton, {label: isJapanese(locale) ? 'このパネルを固定表示' : 'Pin this panel'})),
+            // The GUI's target pane stays mounted, so its file inputs and library keep working while hidden.
+            element('div', {className: styles.drawerSprites, hidden: Boolean(active)}, content),
+            active && element('div', {className: styles.drawerViewContent, 'data-drawer-content': active.id},
+                active.render({locale}))));
     }
 
     function SpriteGrid(props) {
@@ -305,8 +350,18 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         ) : fallback;
     }
 
+    function DrawerPinButton({label}) {
+        const {targetsPinned, setTargetsPinned} = useContext(context);
+        return element('button', {type: 'button', className: styles.drawerPin, 'aria-label': label, 'aria-pressed': targetsPinned,
+            title: label, onClick: () => setTargetsPinned(value => !value)},
+        element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
+            fill: targetsPinned ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round'},
+        element('path', {d: 'M9 2 14 7 12 8l-2 3-5-5 3-2 1-2Z'}), element('path', {d: 'm7.5 8.5-4 4'}),
+        !targetsPinned && element('path', {d: 'M2 2l12 12', strokeLinecap: 'round'})));
+    }
+
     function useSpriteListTools() {
-        const {locale, targetsPinned, setTargetsPinned} = useContext(context);
+        const {locale} = useContext(context);
         const [mount] = useContext(targetTools) ?? [];
         const [searching, setSearching] = useState(false);
         const [query, setQuery] = useState('');
@@ -331,12 +386,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
                 fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round'},
             element('circle', {cx: 6.5, cy: 6.5, r: 4}), element('path', {d: 'm9.5 9.5 4 4'}))),
-            element('button', {type: 'button', className: styles.drawerPin, 'aria-label': pinLabel, 'aria-pressed': targetsPinned,
-                title: pinLabel, onClick: () => setTargetsPinned(value => !value)},
-            element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
-                fill: targetsPinned ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round'},
-            element('path', {d: 'M9 2 14 7 12 8l-2 3-5-5 3-2 1-2Z'}), element('path', {d: 'm7.5 8.5-4 4'}),
-            !targetsPinned && element('path', {d: 'M2 2l12 12', strokeLinecap: 'round'}))),
+            element(DrawerPinButton, {label: pinLabel}),
             openAction),
             searching && element('input', {type: 'search', className: styles.targetListSearch, 'aria-label': searchLabel,
                 ref: searchInput, placeholder: japanese ? '名前' : 'Name', value: query,

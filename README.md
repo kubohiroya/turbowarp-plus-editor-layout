@@ -31,6 +31,48 @@ Use `/example/?standard=1` in the test host to try the Plus layout. Use `standar
 
 The Editor pins this package from npm.
 
+## Left drawer views
+
+In the Plus standard layout, the left drawer shows the sprite list and backdrop. A host can add more contents by passing `drawerViews` to `StandardLayout`:
+
+```js
+<StandardLayout {...props} storage={localStorage} storageKey="twPlusEditorLayout" drawerViews={{
+    views: [
+        {id: 'project', render: ({locale}) => <ProjectExplorer locale={locale} />, tools: ({locale}) => <ExplorerTools />},
+        {id: 'git-history', label: 'Git history', icon: <HistoryIcon />, render: () => <GitHistory />}
+    ],
+    agents: {renderMenu: ({locale, close}) => <div role="menu">…</div>}
+}} />
+```
+
+- The top of the drawer then shows one row of icon-only buttons (it wraps only when the drawer is too narrow) (`role="toolbar"`, "ドロワーの表示" / "Drawer views"): 1 Sprites, 2 Project folder, 3 Git history and 4 AI agents. Each has `aria-label` and `title` in Japanese or English. A button is shown only for what the host supplies; the sprite list is always first.
+- Buttons 1–3 switch the content and mark the selected one with `aria-pressed`. Arrow keys move between the buttons with one tab stop (left and right wrap around, Home and End go to the ends); Enter and Space activate.
+- `id` is `project` or `git-history`; unknown and repeated ids are ignored. `label` and `icon` default to the package's names and 16 px `currentColor` icons. `render` is called only while the view is selected. `tools` is shown where the sprite list shows its search, pin and undock buttons. Search and undock appear only while the sprite list is selected; the pin button, which pins the drawer itself, stays in every view. The GUI's target pane stays mounted, hidden, while another view is shown.
+- Button 4 is a menu button (`aria-haspopup="menu"`, `aria-expanded`). `renderMenu` renders the menu content, normally one `role="menu"` element with `menuitem` children. The first item gets focus when the menu opens. Escape, a press outside or `close()` closes it and returns focus to the button. The menu does not change the drawer's content.
+- The selected view is saved in `storage` under `<storageKey>.drawer` (`{"version": 1, "view": "project"}`), next to the split layout. A saved view the host does not supply falls back to the sprite list and comes back when the host supplies it again.
+- Without `drawerViews`, or with no supported views and no `agents`, the drawer is unchanged: no bar and no extra element around the sprite list. Supply the views from startup; adding the first one later remounts the GUI's target pane once.
+
+Use `/example/?standard=1&drawer=1&lang=ja` in the test host to try the bar with sample views and the package's AI agent menu.
+
+### AI agent menu and settings
+
+`@kubohiroya/turbowarp-plus-editor-workbench/ai-agents` supplies the menu for button 4 and its settings dialog:
+
+```tsx
+import styles from '@kubohiroya/turbowarp-plus-editor-workbench/editor.css';
+import {createAiAgents} from '@kubohiroya/turbowarp-plus-editor-workbench/ai-agents';
+
+const aiAgents = createAiAgents(React, {styles});
+<StandardLayout {...props} drawerViews={{views, agents: aiAgents.drawerMenu}} />
+// Anywhere else, for example a settings menu entry with aiAgents.settingsIcon():
+aiAgents.openSettings({locale, returnFocus: trigger});
+```
+
+- The menu lists the turned-on services, each with an icon and its name, then a separator and "AI エージェント設定…" / "AI agent settings…". Without turned-on services it shows only that item and a short hint. Arrow keys, Home and End move between the items. Choosing a service opens its address with `window.open(url, '_blank', 'noopener,noreferrer')`.
+- The presets are ChatGPT (`https://chatgpt.com/`) and Claude (`https://claude.ai/new`). Each can be turned off, and its address replaced by a deep link such as a previous conversation; an empty address means the default. The user can add and remove services of their own (name and address). Only `https:` addresses are accepted; anything else shows an error under the field. The icons are generic: a chat bubble with an initial for a preset, a globe for the user's own service. No service logos are used.
+- The dialog (`role="dialog"`, `aria-modal`) is plain DOM, so it can be opened without React (`openAgentSettingsDialog`). It focuses its first field, keeps Tab inside, closes on Escape or Cancel without saving, and returns focus to `returnFocus` or to the element focused before.
+- The settings are saved in `localStorage` under `twPlusAiAgents` as `{"version": 1, "services": [...]}`. Each service has a `target` of `kind: "url"`; other kinds are left for later and ignored for now. Missing, broken or invalid data falls back entry by entry to the presets.
+
 ## Verification
 
 Run `npm test` to verify split sizing, aspect ratios, and settings persistence. Run `npm run test:browser` to test the standalone host. To open the test host manually, run `npm install` and `python3 -m http.server` in this directory, then open `/example/`.
