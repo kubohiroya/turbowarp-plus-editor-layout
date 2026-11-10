@@ -156,6 +156,12 @@ test('the drawer bar switches host views, keeps the choice and opens the agent m
     await expect(page.getByRole('list', {name: 'プロジェクトのファイル'})).toBeVisible();
     await expect(spriteTools).toBeHidden();
     await expect(page.getByRole('button', {name: '更新'})).toBeVisible();
+    const barWidth = async () => (await bar.boundingBox()).width;
+    await expect.poll(barWidth, {message: 'the other views open the drawer wider'}).toBeGreaterThan(250);
+    await sprites.click();
+    await expect.poll(barWidth, {message: 'and the sprite list keeps its narrow width'}).toBeLessThan(120);
+    await project.click();
+    await expect.poll(barWidth).toBeGreaterThan(250);
     await page.reload();
     await expect(project).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('list', {name: 'プロジェクトのファイル'})).toBeVisible();

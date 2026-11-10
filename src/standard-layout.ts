@@ -8,6 +8,9 @@ export type {DrawerMenu, DrawerMenuRenderProps, DrawerRenderProps, DrawerView, D
 
 const isJapanese = locale => /^ja(?:-|$)/i.test(locale);
 const singleColumnTargetWidth = 108;
+// Views other than the sprite list show file names and commit subjects, so the drawer opens wider for them.
+const drawerViewWidth = 300;
+const minimumDrawerViewWidth = 160;
 const minimumStandardEditor = 380;
 
 export function createStandardLayout(React, {styles, targetStyles, context, LayoutMenu}) {
@@ -29,6 +32,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const [stageDrawerOpen, setStageDrawerOpen] = useState(false);
         const [size, setSize] = useState(null);
         const [targetRatio, setTargetRatio] = useState(null);
+        const [viewRatio, setViewRatio] = useState(null);
         const [preferredStageWidth, setPreferredStageWidth] = useState(null);
         const [stageActionMount, setStageActionMount] = useState(null);
         const [preferredDrawerView, setPreferredDrawerView] = useState(() => readDrawerView(props.storage, props.storageKey));
@@ -62,11 +66,16 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const stageTools = stageActionEnabled &&
             element('span', {className: styles.stageActionSlot, ref: setStageActionMount});
         const bodyWidth = size?.width ?? 1024;
-        const targetSplit = plusLayout && splitter && size ? splitAxis(
-            bodyWidth, targetRatio, singleColumnTargetWidth, singleColumnTargetWidth, minimumStandardEditor
+        // The sprite list and the other views keep their own widths, so widening one leaves the other as it was.
+        const wideDrawer = plusLayout && drawerView !== 'sprites';
+        const targetSplit = plusLayout && splitter && size ? (wideDrawer ?
+            splitAxis(bodyWidth, viewRatio, drawerViewWidth, minimumDrawerViewWidth, minimumStandardEditor) :
+            splitAxis(bodyWidth, targetRatio, singleColumnTargetWidth, singleColumnTargetWidth, minimumStandardEditor)
         ) : null;
+        const fixedDrawerWidth = Math.max(singleColumnTargetWidth, Math.min(drawerViewWidth, Math.floor(bodyWidth / 2)));
         const resizable = targetSplit && targetSplit.maximum > targetSplit.minimum;
-        const editorSpace = targetsPinned ? (targetSplit?.second ?? bodyWidth - singleColumnTargetWidth) : bodyWidth;
+        const editorSpace = targetsPinned ?
+            (targetSplit?.second ?? bodyWidth - (wideDrawer ? fixedDrawerWidth : singleColumnTargetWidth)) : bodyWidth;
         const maximumStageWidth = Math.max(1, Math.floor(Math.min(editorSpace - 24,
             ((size?.height ?? 640) - 112) * props.stageAspect)));
         const defaultStageWidth = Math.min(maximumStageWidth, Math.floor(Math.min(props.defaultStageWidth, 360, bodyWidth / 2)));
@@ -119,13 +128,17 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (resizable) {
                 bodyStyle['--plus-target-width'] = `${targetSplit.first}px`;
                 bodyStyle['--plus-target-divider-width'] = `${size.width - targetSplit.available}px`;
+            } else if (wideDrawer) {
+                bodyStyle['--plus-target-width'] = `${fixedDrawerWidth}px`;
             }
             // The target list is on the physical left in both text directions.
             const columnSplitter = targetsPinned && resizable ? element(Splitter, {
                 axis: 'columns', split: targetSplit,
-                label: japanese ? 'スプライト一覧と編集領域の幅' : 'Sprite list and editor width',
+                label: wideDrawer ? (japanese ? 'ドロワーと編集領域の幅' : 'Drawer and editor width') :
+                    japanese ? 'スプライト一覧と編集領域の幅' : 'Sprite list and editor width',
                 className: `${styles.separator} ${styles.standardSeparator}`,
-                onChange: setTargetRatio, onReset: () => setTargetRatio(null)
+                onChange: wideDrawer ? setViewRatio : setTargetRatio,
+                onReset: () => (wideDrawer ? setViewRatio : setTargetRatio)(null)
             }) : null;
             return {
                 ...shared,
