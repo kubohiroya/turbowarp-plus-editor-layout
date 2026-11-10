@@ -287,7 +287,10 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         return drawer(element(React.Fragment, null,
             element(DrawerViewBar, {locale, views, agents: drawerViews.agents, selected: active ? active.id : 'sprites',
                 onSelect: selectDrawerView}),
-            active?.tools && element('div', {className: styles.drawerViewTools}, active.tools({locale})),
+            // Pinning belongs to the drawer, so every view keeps the pin button the sprite list shows.
+            active && element('div', {className: styles.drawerViewTools},
+                active.tools?.({locale}),
+                element(DrawerPinButton, {label: isJapanese(locale) ? 'このパネルを固定表示' : 'Pin this panel'})),
             // The GUI's target pane stays mounted, so its file inputs and library keep working while hidden.
             element('div', {className: styles.drawerSprites, hidden: Boolean(active)}, content),
             active && element('div', {className: styles.drawerViewContent, 'data-drawer-content': active.id},
@@ -334,8 +337,18 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         ) : fallback;
     }
 
+    function DrawerPinButton({label}) {
+        const {targetsPinned, setTargetsPinned} = useContext(context);
+        return element('button', {type: 'button', className: styles.drawerPin, 'aria-label': label, 'aria-pressed': targetsPinned,
+            title: label, onClick: () => setTargetsPinned(value => !value)},
+        element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
+            fill: targetsPinned ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round'},
+        element('path', {d: 'M9 2 14 7 12 8l-2 3-5-5 3-2 1-2Z'}), element('path', {d: 'm7.5 8.5-4 4'}),
+        !targetsPinned && element('path', {d: 'M2 2l12 12', strokeLinecap: 'round'})));
+    }
+
     function useSpriteListTools() {
-        const {locale, targetsPinned, setTargetsPinned} = useContext(context);
+        const {locale} = useContext(context);
         const [mount] = useContext(targetTools) ?? [];
         const [searching, setSearching] = useState(false);
         const [query, setQuery] = useState('');
@@ -360,12 +373,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
                 fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round'},
             element('circle', {cx: 6.5, cy: 6.5, r: 4}), element('path', {d: 'm9.5 9.5 4 4'}))),
-            element('button', {type: 'button', className: styles.drawerPin, 'aria-label': pinLabel, 'aria-pressed': targetsPinned,
-                title: pinLabel, onClick: () => setTargetsPinned(value => !value)},
-            element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
-                fill: targetsPinned ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round'},
-            element('path', {d: 'M9 2 14 7 12 8l-2 3-5-5 3-2 1-2Z'}), element('path', {d: 'm7.5 8.5-4 4'}),
-            !targetsPinned && element('path', {d: 'M2 2l12 12', strokeLinecap: 'round'}))),
+            element(DrawerPinButton, {label: pinLabel}),
             openAction),
             searching && element('input', {type: 'search', className: styles.targetListSearch, 'aria-label': searchLabel,
                 ref: searchInput, placeholder: japanese ? '名前' : 'Name', value: query,

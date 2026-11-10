@@ -100,6 +100,27 @@ test('without host views the drawer shows only the sprite list, exactly as befor
     assert.equal(document.querySelector('[role="toolbar"]'), null);
 });
 
+test('every view keeps the pin button, which pins the drawer itself', async t => {
+    const {document, h, render, button, click} = await mountDrawer(t);
+    render(views(h));
+    const drawer = () => document.querySelector('[data-pinned]');
+    assert.ok(drawer(), 'the drawer starts pinned');
+    for (const view of ['プロジェクトフォルダ', 'Git 履歴']) {
+        click(button(view)!);
+        const pin = button('このパネルを固定表示')!;
+        assert.ok(pin, `${view} shows a pin button`);
+        assert.equal(pin.closest('[hidden]'), null);
+        assert.equal(pin.getAttribute('aria-pressed'), 'true');
+    }
+    click(button('このパネルを固定表示')!);
+    assert.equal(drawer(), null, 'unpinning from another view releases the drawer');
+    assert.equal(button('このパネルを固定表示')!.getAttribute('aria-pressed'), 'false');
+    click(button('このパネルを固定表示')!);
+    assert.ok(drawer(), 'and pinning it again works without going back to the sprite list');
+    click(button('スプライト一覧')!);
+    assert.equal(button('スプライト一覧を固定表示')!.getAttribute('aria-pressed'), 'true');
+});
+
 test('the bar shows one icon button per supplied content and switches the drawer', async t => {
     const {document, h, render, button, click, storage, mounts} = await mountDrawer(t);
     render(views(h));
