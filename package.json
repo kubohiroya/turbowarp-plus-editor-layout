@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-plus-editor-workbench",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "The TurboWarp Plus Editor workbench: layout, dockable sprite tabs, stage, debugger tab and file menu",
   "type": "module",
   "license": "MPL-2.0",
@@ -72,7 +72,7 @@
   },
   "dependencies": {
     "@kubohiroya/turbowarp-plus-editor-project-model": "0.1.0",
-    "@kubohiroya/turbowarp-plus-editor-sprite-panes": "0.1.0",
+    "@kubohiroya/turbowarp-plus-editor-sprite-panes": "0.1.1",
     "dockview": "8.8.3"
   },
   "peerDependencies": {
