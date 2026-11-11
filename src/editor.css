@@ -257,6 +257,38 @@
     cursor: nesw-resize;
 }
 
+.stage-drawer .stage-frame:has(> [data-stage-drawer-resize]) {
+    position: relative;
+}
+
+.stage-drawer .stage-resize-handle[data-stage-drawer-resize]:is([data-stage-resize="left"], [data-stage-resize="right"]) {
+    inset: 6px auto 6px 0;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.stage-drawer .stage-resize-handle[data-stage-drawer-resize][data-stage-resize="right"] {
+    inset: 6px 0 6px auto;
+}
+
+.stage-drawer .stage-resize-handle[data-stage-drawer-resize]:is([data-stage-resize="top"], [data-stage-resize="bottom"]) {
+    inset: 0 0 auto;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.stage-drawer .stage-resize-handle[data-stage-drawer-resize][data-stage-resize="bottom"] {
+    inset: auto 0 0;
+}
+
+.stage-drawer:not([data-stage-drawer-contacts]) [data-stage-drawer-resize][data-stage-resize="right"],
+.stage-drawer[data-stage-drawer-contacts~="left"] [data-stage-drawer-resize][data-stage-resize="left"],
+.stage-drawer[data-stage-drawer-contacts~="right"] [data-stage-drawer-resize][data-stage-resize="right"],
+.stage-drawer[data-stage-drawer-contacts~="top"] [data-stage-drawer-resize][data-stage-resize="top"],
+.stage-drawer[data-stage-drawer-contacts~="bottom"] [data-stage-drawer-resize][data-stage-resize="bottom"] {
+    display: none;
+}
+
 .target-list-panel,
 .target-list-content {
     display: flex;
@@ -346,7 +378,22 @@
 }
 
 .standard-body .stage-drawer {
-    right: 0;
+    right: max(0px, calc(100% - 100vw));
+    pointer-events: none;
+}
+
+.standard-body:has(.stage-drawer) {
+    overflow: clip;
+}
+
+.stage-drawer .edge-drawer [data-stage-drawer-handle] {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.stage-drawer[data-stage-drawer-dragging] .edge-drawer [data-stage-drawer-handle] {
+    cursor: grabbing;
 }
 
 .standard-body {
@@ -578,6 +625,86 @@ details.layout-menu button {
 
 .edge-drawer[data-edge="bottom"] .edge-panel {
     border-top: 1px solid var(--ui-black-transparent);
+}
+
+.stage-drawer {
+    --stage-drawer-slide: 100% 0;
+    --stage-drawer-chevron: 135deg;
+}
+
+.stage-drawer[data-stage-drawer-edge="left"] {
+    --stage-drawer-slide: -100% 0;
+    --stage-drawer-chevron: -45deg;
+}
+
+.stage-drawer[data-stage-drawer-edge="top"] {
+    --stage-drawer-slide: 0 -100%;
+    --stage-drawer-chevron: 45deg;
+}
+
+.stage-drawer[data-stage-drawer-edge="bottom"] {
+    --stage-drawer-slide: 0 100%;
+    --stage-drawer-chevron: -135deg;
+}
+
+.edge-drawer[data-movable-stage] > .edge-panel {
+    transition: translate var(--stage-drawer-transition, 160ms) ease-out;
+}
+
+.edge-drawer[data-movable-stage]:not([data-stage-drawer-open]) > .edge-panel {
+    visibility: hidden;
+    translate: var(--stage-drawer-slide);
+    pointer-events: none;
+    transition: translate var(--stage-drawer-transition, 160ms) ease-out, visibility var(--stage-drawer-transition, 160ms);
+}
+
+.edge-drawer[data-movable-stage][data-stage-drawer-unavailable] > .edge-panel {
+    transition: none;
+}
+
+.edge-drawer[data-movable-stage] > .edge-trigger[data-stage-drawer-trigger] {
+    position: absolute;
+    inset: 0 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 8px;
+    min-height: 0;
+    background: var(--ui-secondary);
+    border: 1px solid var(--ui-black-transparent);
+}
+
+.edge-drawer[data-stage-drawer-open] > .edge-trigger[data-stage-drawer-trigger-collapsed]:not(:focus) {
+    display: none;
+}
+
+.edge-trigger[data-stage-drawer-trigger]::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border: solid currentColor;
+    border-width: 0 1px 1px 0;
+    rotate: var(--stage-drawer-chevron);
+}
+
+.stage-drawer[data-stage-drawer-edge="left"] .edge-trigger[data-stage-drawer-trigger] {
+    inset: 0 auto 0 0;
+}
+
+.stage-drawer[data-stage-drawer-edge="top"] .edge-trigger[data-stage-drawer-trigger],
+.stage-drawer[data-stage-drawer-edge="bottom"] .edge-trigger[data-stage-drawer-trigger] {
+    inset: 0 0 auto;
+    width: auto;
+    height: 8px;
+}
+
+.stage-drawer[data-stage-drawer-edge="bottom"] .edge-trigger[data-stage-drawer-trigger] {
+    inset: auto 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edge-drawer[data-movable-stage] {
+        --stage-drawer-transition: 0ms;
+    }
 }
 
 .target-list-panel .open-window-action,
@@ -967,6 +1094,11 @@ details.layout-menu button {
     z-index: var(--plus-docked-utility-layer);
 }
 
+.standard-body .floating-stage.stage-drawer[data-stage-drawer-positioned] {
+    inset: var(--plus-stage-drawer-y) auto auto var(--plus-stage-drawer-x);
+    z-index: calc(var(--plus-docked-utility-layer) + 1);
+}
+
 .standard-body:has(.sprite-tabs[data-multi-view]):has(.retracted-targets) {
     padding-left: 0.625rem;
 }
@@ -1142,8 +1274,7 @@ details.layout-menu button {
 }
 
 .stageLauncherAction,
-.stageLauncherMenu > button,
-.stageFullscreenPrompt {
+.stageLauncherMenu > button {
     min-block-size: 2rem;
     font: inherit;
     cursor: pointer;
@@ -1168,7 +1299,8 @@ details.layout-menu button {
     border-end-start-radius: 1rem;
 }
 
-.stageLauncherAction:disabled {
+.stageLauncherAction:disabled,
+.stageLauncherMenu > button:disabled {
     opacity: 0.5;
     cursor: default;
 }
@@ -1191,25 +1323,19 @@ details.layout-menu button {
     block-size: auto;
 }
 
-.stageFullscreenPrompt {
-    position: fixed;
-    z-index: 2;
-    inset-block-start: 0.5rem;
-    inset-inline-end: 0.5rem;
-    padding-inline: 0.75rem;
-    background: var(--ui-white, #fff);
-    border: 1px solid var(--ui-black-transparent, #d7dbe6);
-    border-radius: 1rem;
-    color: inherit;
+.stagePresentationMenu [role="menu"] {
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.stagePresentationMenu [aria-current="true"]::after {
+    content: '✓' / '';
+    margin-inline-start: auto;
 }
 
 .stageLauncherAction:focus-visible,
 .stageLauncherMenu > button:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: -3px;
-}
-
-.stageFullscreenPrompt:focus-visible {
-    outline: 2px solid var(--looks-secondary, #4c97ff);
-    outline-offset: -2px;
 }

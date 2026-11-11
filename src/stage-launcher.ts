@@ -1,30 +1,51 @@
 import React, {createElement as element, type ComponentType} from 'react';
-import {createPortal} from 'react-dom';
 
 const labels = {
     ja: {
         open: 'ステージを開く',
         menu: 'ステージの開き方',
-        window: '別ウィンドウで開く',
-        fullscreen: '別ウィンドウで全画面で開く',
-        tab: 'ステージをタブで開く',
-        drawer: 'ステージを引き出しで開く',
-        enterFullscreen: '全画面にする'
+        window: '別ウィンドウで表示',
+        tab: 'タブで表示',
+        drawer: '引出しで表示'
     },
     en: {
         open: 'Open stage',
         menu: 'Stage opening options',
-        window: 'Open in a separate window',
-        fullscreen: 'Open fullscreen in a separate window',
-        tab: 'Open stage in a tab',
-        drawer: 'Open stage in the drawer',
-        enterFullscreen: 'Enter fullscreen'
+        window: 'Show in a separate window',
+        tab: 'Show in a tab',
+        drawer: 'Show in the drawer'
     }
 };
 
-const modes = ['window', 'fullscreen', 'tab', 'drawer'] as const;
+const modes = ['window', 'tab', 'drawer'] as const;
 type StageMode = typeof modes[number];
 const textFor = (locale: string) => /^ja(?:-|$)/i.test(locale) ? labels.ja : labels.en;
+const icons: Record<StageMode, string> = {
+    window: 'M7 3H3v10h10V9m-5-1 5-5m-4 0h4v4',
+    tab: 'M2.5 6V3.5H7L8.5 6h5v6.5h-11zM2.5 6H9',
+    drawer: 'M2.5 3.5h11v9h-11zM10.5 3.5v9M8.5 8h-4m1.5-1.5L4.5 8 6 9.5'
+};
+
+export function stagePresentationItems(locale: string, current: StageMode | null,
+    actions: Partial<Record<StageMode, () => void>>): MenuItem[] {
+    const text = textFor(locale);
+    return modes.map(id => ({
+        id, label: text[id], current: current === id, disabled: !actions[id], onSelect: actions[id],
+        icon: element('svg', {viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4,
+            strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true}, element('path', {d: icons[id]}))
+    }));
+}
+
+export function useStageDocumentFullscreen(doc?: Document) {
+    const [fullscreenDocument, setFullscreenDocument] = React.useState<Document>();
+    React.useLayoutEffect(() => {
+        const update = () => setFullscreenDocument(doc?.fullscreenElement ? doc : undefined);
+        update();
+        doc?.addEventListener('fullscreenchange', update);
+        return () => doc?.removeEventListener('fullscreenchange', update);
+    }, [doc]);
+    return Boolean(doc && fullscreenDocument === doc);
+}
 
 export interface StageDockAction {
     kind: 'docked' | 'opening' | 'external';
@@ -38,13 +59,14 @@ interface MenuItem {
     label: string;
     current: boolean;
     disabled: boolean;
-    onSelect(): void;
+    icon: React.ReactNode;
+    onSelect?(): void;
 }
 
 export interface StageLauncherOptions {
     mount: HTMLElement;
     styles: Record<string, string>;
-    MenuButton: ComponentType<{label: string; icon: React.ReactNode; items: MenuItem[]; className: string}>;
+    MenuButton: ComponentType<{label: string; icon: React.ReactNode; items: MenuItem[]; className: string; disabled?: boolean}>;
 }
 
 interface StageLauncherProps {
@@ -53,94 +75,49 @@ interface StageLauncherProps {
     dockAction?: StageDockAction;
     tab?: {docked: boolean; commands: {open(): void} | null};
     drawerOpen: boolean;
+    editorFullscreen?: boolean;
     focusDrawer(): void;
     revealStage(): void;
 }
 
-export function StageLauncher({locale, options, dockAction, tab, drawerOpen, focusDrawer, revealStage}: StageLauncherProps) {
-    const [fullscreen, setFullscreen] = React.useState(false);
-    const exitFullscreen = React.useCallback(() => setFullscreen(false), []);
+export function StageLauncher({locale, options, dockAction, tab, drawerOpen, editorFullscreen, focusDrawer, revealStage}: StageLauncherProps) {
+    const [drawerSelected, setDrawerSelected] = React.useState(false);
     const {styles, MenuButton} = options;
     const text = textFor(locale);
     const separate = dockAction?.kind === 'opening' || dockAction?.kind === 'external';
-    const child = separate ? dockAction.mount?.ownerDocument : undefined;
-    const mode = separate ? (fullscreen ? 'fullscreen' : 'window') :
-        (tab?.docked ? 'tab' : (drawerOpen ? 'drawer' : null));
+    const mode = separate ? 'window' : (tab?.docked ? 'tab' : (drawerOpen ? 'drawer' : null));
+    const disabled = Boolean(editorFullscreen || mode);
     const available = {
         window: Boolean(dockAction?.external),
-        fullscreen: Boolean(dockAction?.external),
         tab: Boolean(tab?.commands),
         drawer: true
     };
+    const defaultTarget = drawerSelected || !available.window ? 'drawer' : 'window';
 
     React.useLayoutEffect(() => {
-        if (!separate) setFullscreen(false);
-    }, [separate]);
+        if (mode && !editorFullscreen) setDrawerSelected(mode === 'drawer');
+    }, [mode, editorFullscreen]);
 
     function activate(target: StageMode) {
-        if (mode && target !== mode) return;
-        if (separate) {
-            child?.defaultView?.focus();
-            return;
-        }
-        if (!available[target]) return;
+        if (disabled || !available[target]) return;
         revealStage();
         if (target === 'drawer') focusDrawer();
         else if (target === 'tab') tab?.commands?.open();
-        else {
-            setFullscreen(target === 'fullscreen');
-            // Keep opening the popup on the original user gesture.
-            dockAction?.undock();
-        }
+        else dockAction?.undock();
     }
 
-    return element(React.Fragment, null,
-        element('div', {className: styles.stageLauncher},
+    const actions: Partial<Record<StageMode, () => void>> = {};
+    for (const target of modes) {
+        if (!disabled && available[target]) actions[target] = () => activate(target);
+    }
+    return element('div', {className: styles.stageLauncher},
             element('button', {
                 type: 'button',
                 className: styles.stageLauncherAction,
-                disabled: !mode && !available.window,
-                onClick: () => activate(mode ?? 'window')
-            }, text[mode ?? 'open']),
-            element(MenuButton, {label: text.menu, icon: '▾', className: styles.stageLauncherMenu, items: modes.map(id => ({
-                id, label: text[id], current: mode === id, disabled: mode ? mode !== id : !available[id],
-                onSelect: () => activate(id)
-            }))})),
-        mode === 'fullscreen' && dockAction?.mount &&
-            element(PopupFullscreen, {mount: dockAction.mount, label: text.enterFullscreen,
-                className: styles.stageFullscreenPrompt, onExit: exitFullscreen}));
-}
-
-function PopupFullscreen({mount, label, className, onExit}: {
-    mount: HTMLElement;
-    label: string;
-    className: string;
-    onExit(): void;
-}) {
-    const child = mount.ownerDocument;
-    const [needsGesture, setNeedsGesture] = React.useState(false);
-    const enter = React.useCallback(async () => {
-        try {
-            if (!child.fullscreenElement) await child.documentElement.requestFullscreen();
-            setNeedsGesture(false);
-        } catch {
-            setNeedsGesture(true);
-        }
-    }, [child]);
-
-    React.useEffect(() => {void enter();}, [enter]);
-    React.useEffect(() => {
-        let wasFullscreen = Boolean(child.fullscreenElement);
-        const changed = () => {
-            if (child.fullscreenElement) wasFullscreen = true;
-            else if (wasFullscreen) onExit();
-        };
-        child.addEventListener('fullscreenchange', changed);
-        return () => child.removeEventListener('fullscreenchange', changed);
-    }, [child, onExit]);
-
-    // Mount a separate React portal so the child document receives the trusted click.
-    return needsGesture ? createPortal(
-        element('button', {type: 'button', className, onClick: enter}, label), mount
-    ) : null;
+                disabled,
+                onClick: () => activate(defaultTarget)
+            }, text.open),
+            element(MenuButton, {label: text.menu, icon: '▾', disabled,
+                className: `${styles.stageLauncherMenu} ${styles.stagePresentationMenu}`,
+                items: stagePresentationItems(locale, mode ?? (drawerSelected ? 'drawer' : null), actions)}));
 }

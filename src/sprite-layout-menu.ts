@@ -13,6 +13,8 @@ interface SpriteLayoutCommands {
     setVerticalTabs?(vertical: boolean): void;
 }
 
+export const panelLayoutIconPath = 'M2.5 3.5h11v9h-11zM2.5 6.5h11m-7 0v6';
+
 const labels = {
     ja: ['編集パネルのレイアウト', 'パネルを横に分割', 'パネルを縦に分割', 'この分割パネルを閉じる',
         'パネルを別画面で開く', 'ブロックパレットを別画面で開く', 'タブを垂直に並べて表示', 'タブを水平に並べて表示'],
@@ -47,7 +49,7 @@ export function createSpriteLayoutMenu(document: Document, locale: string, comma
     trigger.setAttribute('aria-label', title);
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.append(createIcon(document, 'M2.5 3.5h11v9h-11zM2.5 6.5h11m-7 0v6'));
+    trigger.append(createIcon(document, panelLayoutIconPath));
     element.append(trigger);
 
     const popup = document.createElement('div');

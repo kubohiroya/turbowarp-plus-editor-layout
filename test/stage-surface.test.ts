@@ -10,7 +10,7 @@ test('reports a blocked popout without opening a Dockview panel', () => {
     assert.equal(host.open({}), null);
 });
 
-test('mounts in the child document and disconnects when the Dockview tab closes', async t => {
+test('mounts without a visible tab bar and disconnects when the child window closes', async t => {
     const opener = new JSDOM('', {pretendToBeVisual: true});
     const child = new JSDOM('<main></main>', {pretendToBeVisual: true});
     const globals = {
@@ -49,11 +49,11 @@ test('mounts in the child document and disconnects when the Dockview tab closes'
     assert.equal(target.request, 'request');
     assert.equal(target.mount.ownerDocument, child.window.document);
     assert.ok(mount.querySelector('.dv-content-container')?.contains(target.mount));
-    assert.match(mount.querySelector('.dv-tab')?.textContent ?? '', /Stage/);
+    const header = mount.querySelector('.dv-tabs-and-actions-container');
+    assert.ok(header);
+    assert.equal(child.window.getComputedStyle(header).display, 'none');
 
-    const closeTab = mount.querySelector<HTMLElement>('.dv-default-tab-action');
-    assert.ok(closeTab);
-    closeTab.click();
+    windowClosed.abort();
     assert.equal(connection.disconnected.aborted, true);
     connection.close();
     connection.close();
@@ -146,7 +146,7 @@ test('handles a child window closing before its mount is ready', async () => {
     }
 });
 
-test('the menu bar launcher replaces the stage drawer handle on the right edge', async t => {
+test('the menu bar launcher opens the stage drawer without an initial edge handle', async t => {
     const dom = new JSDOM('<main></main><nav></nav>', {pretendToBeVisual: true});
     const globals = {window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true};
     Object.assign(globalThis, globals);
@@ -160,7 +160,8 @@ test('the menu bar launcher replaces the stage drawer handle on the right edge',
     const context = React.createContext({locale: 'ja', stageDrawer: true});
     const {EdgeDrawer} = createStandardLayout(React, {styles, targetStyles: styles, context, LayoutMenu: () => null});
     const StageSurface = createStageSurface(React, {context, EdgeDrawer, Panel: () => null});
-    const MenuButton = ({label}: {label: string}) => React.createElement('button', {type: 'button'}, label);
+    const MenuButton = ({label, disabled}: {label: string; disabled?: boolean}) =>
+        React.createElement('button', {type: 'button', disabled}, label);
     const nav = dom.window.document.querySelector('nav')!;
     const root = createRoot(dom.window.document.querySelector('main')!);
     t.after(() => {
@@ -176,4 +177,10 @@ test('the menu bar launcher replaces the stage drawer handle on the right edge',
     act(() => root.render(React.createElement(StageSurface, {launcher: {mount: nav, styles, MenuButton}})));
     assert.equal(handle()?.outerHTML, undefined);
     assert.match(nav.textContent ?? '', /ステージを開く/);
+    const [open, options] = nav.querySelectorAll('button');
+    assert.equal(open.disabled, false, 'the launcher can open the drawer without a separate window host');
+    assert.equal(options.disabled, false);
+    act(() => open.click());
+    assert.equal(open.disabled, true);
+    assert.equal(options.disabled, true);
 });

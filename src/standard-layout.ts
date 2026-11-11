@@ -2,6 +2,7 @@ import {createLayout, createSplitter, splitAxis} from './index.ts';
 import {createTargetList} from './targets.ts';
 import type {DrawerViews} from './drawer-views.ts';
 import {availableDrawerViews, createDrawerViewBar, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
+import {attachStageDrawerDrag} from './stage-drawer-drag.ts';
 
 export type {DrawerMenu, DrawerMenuRenderProps, DrawerRenderProps, DrawerView, DrawerViewId, DrawerViews,
     HostDrawerViewId} from './drawer-views.ts';
@@ -77,6 +78,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const editorSpace = targetsPinned ?
             (targetSplit?.second ?? bodyWidth - (wideDrawer ? fixedDrawerWidth : singleColumnTargetWidth)) : bodyWidth;
         const maximumStageWidth = Math.max(1, Math.floor(Math.min(editorSpace - 24,
+            stageDrawer ? (size?.viewportWidth ?? bodyWidth) - 12 : Infinity,
             ((size?.height ?? 640) - 112) * props.stageAspect)));
         const defaultStageWidth = Math.min(maximumStageWidth, Math.floor(Math.min(props.defaultStageWidth, 360, bodyWidth / 2)));
         const minimumStageWidth = Math.min(defaultStageWidth, 280);
@@ -94,13 +96,20 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (!Observer) return;
             const measure = () => {
                 const {clientWidth: width, clientHeight: height} = node;
-                setSize(previous => previous?.width === width && previous.height === height ? previous : {width, height});
+                const viewportWidth = node.ownerDocument.documentElement.clientWidth;
+                setSize(previous => previous?.width === width && previous.height === height &&
+                    previous.viewportWidth === viewportWidth ? previous : {width, height, viewportWidth});
             };
             const observer = new Observer(measure);
             measure();
             observer.observe(node);
-            return () => observer.disconnect();
-        }, []);
+            const view = node.ownerDocument.defaultView;
+            if (stageDrawer) view.addEventListener('resize', measure);
+            return () => {
+                observer.disconnect();
+                if (stageDrawer) view.removeEventListener('resize', measure);
+            };
+        }, [stageDrawer]);
 
         const renderEditorTabRow = (tabs, action) => element('div', {className: styles.tabRow}, tabs,
             (layoutMenu || windowTools) && element('div', {className: styles.layoutTools}, layoutMenu, windowTools), action);
@@ -122,7 +131,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             const stageOverlaps = showStage && (!stageDrawer || stageDrawerOpen);
             const bodyStyle = {
                 display: 'grid',
-                '--plus-stage-overlap': stageOverlaps ? stageOverlap : '0px',
+                '--plus-stage-overlap': showStage && !stageDrawer ? stageOverlap : '0px',
                 '--plus-stage-tab-inset': stageOverlaps ? stageOverlap : '3rem'
             };
             if (resizable) {
@@ -180,14 +189,34 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     }
 
     function EdgeDrawer({edge, label, pinned = false, onOpenChange, portalContent = false, holdOpenSelector = '',
-        focusPanelRef = undefined, focusBoundary = undefined, showTrigger = true, children}) {
+        focusPanelRef = undefined, closePanelRef = undefined, focusBoundary = undefined, showTrigger = true,
+        movableStage = false, available = true, children}) {
         const [hovered, setHovered] = useState(false);
         const [engaged, setEngaged] = useState(false);
         const [heldOpen, setHeldOpen] = useState(false);
         const drawer = useRef(null);
         const trigger = useRef(null);
         const panel = useRef(null);
-        const open = pinned || hovered || engaged || heldOpen;
+        const opened = useRef(false);
+        const open = available && (pinned || hovered || engaged || heldOpen);
+        const stageTrigger = movableStage && available && (showTrigger || opened.current);
+
+        useLayoutEffect(() => {
+            if (open) opened.current = true;
+            if (!available) {
+                setHovered(false);
+                setEngaged(false);
+            }
+        }, [open, available]);
+
+        useLayoutEffect(() => {
+            if (!movableStage) return;
+            const node = drawer.current as HTMLElement;
+            const stage = node.closest<HTMLElement>(`.${styles.stageDrawer}`);
+            const editor = stage?.closest<HTMLElement>(`.${styles.standardBody}`);
+            if (!editor || !node.ownerDocument.defaultView?.ResizeObserver) return;
+            return attachStageDrawerDrag(node, stage, editor, () => panel.current.focus({preventScroll: true}));
+        }, [movableStage]);
 
         useLayoutEffect(() => {
             if (!holdOpenSelector) return;
@@ -211,6 +240,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         useLayoutEffect(() => {onOpenChange?.(open);}, [open, onOpenChange]);
 
         const enter = (event: PointerEvent) => {
+            if (movableStage && !showTrigger && !open) return;
             if (event.pointerType === 'mouse') setHovered(true);
         };
         const leave = () => setHovered(false);
@@ -219,10 +249,14 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         };
         const blur = (event: FocusEvent) => {
             const target = event.relatedTarget as Node;
+            const source = event.target as HTMLButtonElement;
+            // Opening the stage disables the launcher before focus moves into the drawer.
+            if (!target && source.disabled && focusBoundary?.contains(source)) return;
             if (!drawer.current.contains(target) && !focusBoundary?.contains(target)) setEngaged(false);
         };
 
         const focusPanel = () => {
+            if (!available) return;
             setEngaged(true);
             const frame = drawer.current.ownerDocument.defaultView;
             frame.requestAnimationFrame(() => {
@@ -233,7 +267,28 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (!focusPanelRef) return;
             focusPanelRef.current = focusPanel;
             return () => {focusPanelRef.current = null;};
-        }, [focusPanelRef]);
+        }, [focusPanelRef, available]);
+
+        const closePanel = React.useCallback(() => {
+            setHovered(false);
+            setEngaged(false);
+            const button = (showTrigger ? trigger.current : focusBoundary?.querySelector('button')) as HTMLButtonElement | undefined;
+            if (button?.disabled) {
+                button.ownerDocument.defaultView?.requestAnimationFrame(() => button.focus({preventScroll: true}));
+            } else button?.focus({preventScroll: true});
+        }, [focusBoundary, showTrigger]);
+        useLayoutEffect(() => {
+            if (!closePanelRef || !open) return;
+            closePanelRef.current = closePanel;
+            return () => {closePanelRef.current = null;};
+        }, [closePanelRef, closePanel, open]);
+
+        const closeOnEscape = event => {
+            if (event.key !== 'Escape' || pinned || heldOpen || !open || event.defaultPrevented ||
+                (movableStage && (event.target as Element).closest('[role="menu"]'))) return;
+            closePanel();
+            event.stopPropagation();
+        };
         useLayoutEffect(() => {
             if (!focusBoundary) return;
             focusBoundary.addEventListener('focusout', blur);
@@ -254,33 +309,43 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                 node.removeEventListener('focusin', focus);
                 node.removeEventListener('focusout', blur);
             };
-        }, [portalContent, focusBoundary]);
+        }, [portalContent, focusBoundary, open, showTrigger, movableStage]);
+
+        useLayoutEffect(() => {
+            if (!portalContent || !movableStage || !open) return;
+            const node = drawer.current as HTMLElement;
+            node.addEventListener('keydown', closeOnEscape);
+            return () => node.removeEventListener('keydown', closeOnEscape);
+        }, [portalContent, movableStage, open, heldOpen, pinned, closePanel]);
 
         return element('div', {
             className: styles.edgeDrawer,
             ref: drawer,
             'data-edge': edge,
             'data-pinned': pinned || undefined,
+            'data-movable-stage': movableStage || undefined,
+            'data-stage-drawer-open': movableStage && open || undefined,
+            'data-stage-drawer-unavailable': movableStage && !available || undefined,
             ...(!portalContent && {onPointerEnter: enter, onPointerLeave: leave, onFocus: focus, onBlur: blur}),
-            onKeyDown: event => {
-                if (event.key !== 'Escape' || pinned || heldOpen || !open || event.defaultPrevented) return;
-                setHovered(false);
-                setEngaged(false);
-                // Without its own trigger, the drawer returns focus to the control that opened it.
-                (trigger.current ?? focusBoundary?.querySelector('button'))?.focus();
-                event.stopPropagation();
-            }
+            onKeyDown: portalContent && movableStage ? undefined : closeOnEscape
         },
-        showTrigger && element('button', {
+        (movableStage ? stageTrigger : showTrigger) && element('button', {
             type: 'button',
             className: styles.edgeTrigger,
             hidden: pinned,
             'aria-label': label,
             'aria-expanded': open,
+            'data-stage-drawer-trigger': movableStage || undefined,
+            'data-stage-drawer-trigger-collapsed': movableStage && !showTrigger || undefined,
             ref: trigger,
             onClick: focusPanel
-        }, {left: '›', right: '‹', bottom: '⌃'}[edge]),
-        element('div', {className: styles.edgePanel, ref: panel, tabIndex: -1, hidden: !open}, children));
+        }, movableStage ? null : {left: '›', right: '‹', bottom: '⌃'}[edge]),
+        element('div', {
+            className: styles.edgePanel, ref: panel, tabIndex: -1,
+            hidden: !movableStage && !open,
+            'aria-hidden': movableStage && !open || undefined,
+            inert: movableStage && !open ? '' : undefined
+        }, children));
     }
 
     function TargetLayout({compact, render}) {

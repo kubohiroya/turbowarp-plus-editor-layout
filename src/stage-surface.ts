@@ -5,6 +5,8 @@ import {createDockview, themeLight} from 'dockview';
 import {StageLauncher, type StageDockAction, type StageLauncherOptions} from './stage-launcher.ts';
 
 export type {StageDockAction, StageLauncherOptions} from './stage-launcher.ts';
+export {stagePresentationItems, useStageDocumentFullscreen} from './stage-launcher.ts';
+export {StageResizeHandle} from './stage-resize-handle.ts';
 
 interface StageWindowConnection<Target> {
     ready: Promise<Target>;
@@ -47,7 +49,8 @@ export function createStagePopoutHost<Request, Target extends {mount: HTMLElemen
                     disableAutoResizing: true
                 });
                 dockview = view;
-                view.addPanel({id: 'stage', component: 'stage', title});
+                const group = view.addGroup({direction: 'right', hideHeader: true});
+                view.addPanel({id: 'stage', component: 'stage', title, position: {referenceGroup: group}});
                 removed = view.onDidRemovePanel(disconnect);
                 const layout = () => {
                     if (mount.clientWidth > 0 && mount.clientHeight > 0) view.layout(mount.clientWidth, mount.clientHeight);
@@ -115,15 +118,20 @@ export function createStageSurface(React: typeof import('react'), {
     EdgeDrawer: ElementType;
     Panel: ElementType;
 }) {
-    return function StageSurface({externalHost, onDockActionChange, placement, dockAction, launcher, ...props}: {
+    return function StageSurface({externalHost, onDockActionChange, placement, dockAction, launcher,
+        openDrawerRef, closeDrawerRef, editorFullscreen, ...props}: {
         placement?: StagePlacement;
         dockAction?: StageDockAction;
         launcher?: StageLauncherOptions;
+        openDrawerRef?: {current: (() => void) | null};
+        closeDrawerRef?: {current: (() => void) | null};
+        editorFullscreen?: boolean;
         [key: string]: any;
     }) {
         const {locale, stageDrawer, stageHidden, setStageDrawerOpen, setStageVisible} = React.useContext(context);
         const [drawerOpen, setDrawerOpen] = React.useState(false);
-        const focusDrawer = React.useRef<() => void>(null);
+        const localDrawerRef = React.useRef<() => void>(null);
+        const focusDrawer = openDrawerRef ?? localDrawerRef;
         const onOpenChange = React.useCallback((open: boolean) => {
             setStageDrawerOpen?.(open);
             setDrawerOpen(open);
@@ -146,19 +154,23 @@ export function createStageSurface(React: typeof import('react'), {
         }) : panel;
         const dock = stageDrawer ? React.createElement(EdgeDrawer, {
             edge: 'right',
+            movableStage: true,
+            available: !placement?.docked && (!dockAction || dockAction.kind === 'docked'),
             label: japanese ? 'ステージを展開' : 'Reveal stage',
             onOpenChange,
             focusPanelRef: launcher ? focusDrawer : undefined,
+            closePanelRef: launcher ? closeDrawerRef : undefined,
             focusBoundary: launcher?.mount,
-            // The menu bar launcher replaces the edge handle.
+            // With the launcher, the handle appears after the drawer has been opened once.
             showTrigger: !launcher,
             portalContent: Boolean(placement),
             holdOpenSelector: '[data-turbowarp-app-shell-source-chooser][role="dialog"][aria-modal="true"]'
         }, inline) : inline;
-        const launcherView = stageDrawer && launcher ? createPortal(React.createElement(StageLauncher, {
+        const launcherView = launcher && (stageDrawer || editorFullscreen) ? createPortal(React.createElement(StageLauncher, {
             locale, options: launcher, dockAction,
             tab: placement?.commands ? {docked: placement.docked, commands: placement.commands} : undefined,
-            drawerOpen: drawerOpen && !stageHidden,
+            drawerOpen: stageDrawer && drawerOpen && !stageHidden,
+            editorFullscreen,
             focusDrawer: () => focusDrawer.current?.(),
             revealStage: () => {if (stageHidden) setStageVisible?.(true);}
         }), launcher.mount) : null;
