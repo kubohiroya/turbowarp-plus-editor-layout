@@ -376,17 +376,134 @@ test('documents of one area open in their own split, gathered under tab groups',
     }
 });
 
-test('the layout menu stands the tabs of every split in a column and remembers the choice', t => {
+/** Keeps layouts in memory, standing in for IndexedDB. */
+function memoryLayoutStore(layouts: Record<string, string> = {}, exact = true) {
+    let tabs: 'top' | 'left' | undefined;
+    const opened: string[] = [];
+    const writes: string[] = [];
+    const store = {
+        async open(identity: {name: string}) {
+            opened.push(identity.name);
+            const layout = layouts[identity.name];
+            return {layout, exact: Boolean(layout) && exact, saved: Boolean(layout),
+                async write(raw: string) { writes.push(raw); }};
+        },
+        async readTabsPosition() { return tabs; },
+        async writeTabsPosition(position: 'top' | 'left') { tabs = position; }
+    };
+    return {store, opened, writes, tabs: () => tabs};
+}
+
+const settle = async () => {
+    for (let index = 0; index < 4; index++) await new Promise(resolve => setTimeout(resolve, 20));
+};
+
+function spriteTarget(id: string, name: string) {
+    return {id, isOriginal: true, isStage: false, getName: () => name,
+        getCurrentCostume: () => ({asset: {encodeDataURI: () => `/${id}.svg`}})};
+}
+
+/** A layout with each named sprite in its own split, from left to right. */
+function splitLayout(...names: string[]) {
+    const panels = Object.fromEntries(names.map((name, index) =>
+        [`view-${index}`, {kind: 'sprite', name, stage: false, section: 0}]));
+    return JSON.stringify({version: 1, project: 'saved project', activeGroup: 'group-0', editingView: 'view-0', panels,
+        grid: {width: 1000, height: 700, orientation: 'HORIZONTAL', root: {type: 'branch', size: 700,
+            data: names.map((_, index) => ({type: 'leaf', size: 1000 / names.length,
+                data: {id: `group-${index}`, views: [`view-${index}`], activeView: `view-${index}`}}))}}});
+}
+
+test('a project found by its file reopens its splits and leaves out sprites it no longer has', async t => {
+    const document = setupDom(t);
+    const first = spriteTarget('first', 'First');
+    const renamed = spriteTarget('second', 'Renamed');
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [first, renamed]}, editingTarget: first});
+    const root = document.querySelector('main');
+    const {store} = memoryLayoutStore({'Game.sb3': splitLayout('First', 'Second', 'First')});
+    const controller = mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen',
+        workspaceLayout: {store, identify: () => ({kind: 'anonymous', name: 'Game.sb3'})}
+    });
+    try {
+        await settle();
+        const groups = [...root.querySelectorAll('.dv-groupview')].map(group =>
+            [...group.querySelectorAll('.dv-tab')].map(tab => tab.textContent));
+        assert.deepEqual(groups, [['First'], ['First(2)']], 'the split of the renamed sprite is left out');
+    } finally {
+        controller.dispose();
+    }
+});
+
+test('a project found only by its name and sprites opens with the default layout when its sprites changed', async t => {
+    const document = setupDom(t);
+    const first = spriteTarget('first', 'First');
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [first]}, editingTarget: first});
+    const root = document.querySelector('main');
+    const {store} = memoryLayoutStore({'Game': splitLayout('First', 'First')}, false);
+    const controller = mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen',
+        workspaceLayout: {store, identify: () => ({kind: 'anonymous', name: 'Game'})}
+    });
+    try {
+        await settle();
+        assert.equal(root.querySelectorAll('.dv-groupview').length, 1);
+    } finally {
+        controller.dispose();
+    }
+});
+
+test('each project that loads reopens the layout it was left with', async t => {
+    const document = setupDom(t);
+    const first = spriteTarget('first', 'First');
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [first]}, editingTarget: first});
+    const root = document.querySelector('main');
+    const {store, opened} = memoryLayoutStore({'b.sb3': splitLayout('Hero', 'Enemy')});
+    let loading = false;
+    let name = 'a.sb3';
+    const listeners = new Set<() => void>();
+    const controller = mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen',
+        workspaceLayout: {store, identify: () => ({kind: 'anonymous', name}), isProjectLoading: () => loading,
+            subscribeProject(listener) {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            }}
+    });
+    const notify = () => { for (const listener of listeners) listener(); };
+    try {
+        await settle();
+        assert.deepEqual(opened, ['a.sb3']);
+        assert.equal(root.querySelectorAll('.dv-groupview').length, 1);
+
+        loading = true;
+        notify();
+        const hero = spriteTarget('hero', 'Hero');
+        vm.runtime.targets = [hero, spriteTarget('enemy', 'Enemy')];
+        vm.editingTarget = hero;
+        name = 'b.sb3';
+        vm.emit('targetsUpdate');
+        loading = false;
+        notify();
+        await settle();
+        assert.deepEqual(opened, ['a.sb3', 'b.sb3']);
+        const groups = [...root.querySelectorAll('.dv-groupview')].map(group =>
+            [...group.querySelectorAll('.dv-tab')].map(tab => tab.textContent));
+        assert.deepEqual(groups, [['Hero'], ['Enemy']]);
+    } finally {
+        controller.dispose();
+    }
+});
+
+test('the layout menu stands the tabs of every split in a column and remembers the choice', async t => {
     const document = setupDom(t);
     const sprite = {id: 'sprite', isOriginal: true, isStage: false, getName: () => 'Sprite',
         getCurrentCostume: () => ({asset: {encodeDataURI: () => '/sprite.svg'}})};
     const vm = Object.assign(new EventEmitter(), {runtime: {targets: [sprite]}, editingTarget: sprite});
     const root = document.querySelector('main');
-    const saved = new Map<string, string>();
-    const storage = {getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => { saved.set(key, value); }};
+    const layouts = memoryLayoutStore();
     const mount = () => mountSpriteTabs(root, document.createElement('div'), {
         vm, multiView: true, locale: 'ja', getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {},
-        reopenLabel: 'Reopen', layoutStorage: {storage, key: 'layout'}
+        reopenLabel: 'Reopen', workspaceLayout: {store: layouts.store}
     });
     const item = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.tw-plus-sprite-layout-menu-popup button')]
         .find(button => button.textContent === label);
@@ -400,7 +517,7 @@ test('the layout menu stands the tabs of every split in a column and remembers t
         assert.ok(item('タブを垂直に並べて表示'));
         assert.equal(item('タブを水平に並べて表示'), undefined);
         item('タブを垂直に並べて表示').click();
-        assert.equal(saved.get('layout.tabs'), 'left');
+        assert.equal(layouts.tabs(), 'left');
         assert.deepEqual(positions(), ['left', 'left']);
         openMenu();
         assert.ok(item('タブを水平に並べて表示'), 'the item names the arrangement it switches to');
@@ -411,7 +528,9 @@ test('the layout menu stands the tabs of every split in a column and remembers t
     root.replaceChildren();
     controller = mount();
     try {
+        await settle();
         assert.ok(positions().every(position => position === 'left'), 'a new workspace keeps the column');
+        assert.deepEqual(layouts.writes, [], 'the tab position is not written over a layout');
     } finally {
         controller.dispose();
     }

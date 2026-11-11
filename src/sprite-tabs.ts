@@ -15,6 +15,8 @@ import type {DocumentPanelRequest} from './document-workspace.ts';
 import {dockPopoutGroups, positionOnScreen, readWorkspaceLayout, workspaceWithoutTransientPanels}
     from './workspace-layout.ts';
 import type {PanelReference, SavedPopout, WorkspaceLayout} from './workspace-layout.ts';
+import {createWorkspaceLayoutStore} from './workspace-layout-store.ts';
+import type {WorkspaceLayoutSession, WorkspaceLayoutStore, WorkspaceProjectIdentity} from './workspace-layout-store.ts';
 import type {SpriteVariableEdit, SpriteVariableEditError} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 import {SpriteMessagePane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
 import type {MessageRenameError} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
@@ -22,6 +24,8 @@ import type {MessageUse, ProjectMessage, TargetMessages} from '@kubohiroya/turbo
 import {createRenameMenuItem, spriteRenameLabel} from './target-tab-menu.ts';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
+export {createWorkspaceLayoutStore, workspaceLayoutDatabase, workspaceLayoutLimit} from './workspace-layout-store.ts';
+export type {WorkspaceLayoutStore, WorkspaceProjectIdentity} from './workspace-layout-store.ts';
 export type {SpriteAssetKind, SpriteAssetPreviewItem} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 export {editSpriteVariable} from '@kubohiroya/turbowarp-plus-editor-project-model/sprite-variable-edit';
 
@@ -145,9 +149,12 @@ interface TabOptions<Snapshot = unknown> {
     resize(): void;
     reopenLabel: string;
     multiView?: boolean;
-    layoutStorage?: {
-        storage: Pick<Storage, 'getItem' | 'setItem'>;
-        key: string;
+    /** Keep the workspace of each project and reopen it with the project. */
+    workspaceLayout?: {
+        /** IndexedDB by default. */
+        store?: WorkspaceLayoutStore;
+        /** The file, folder or desktop key the loaded project came from. Without one, it is known by its name. */
+        identify?(): WorkspaceProjectIdentity | undefined;
         isProjectLoading?(): boolean;
         subscribeProject?(listener: () => void): (() => void) | undefined;
     };
@@ -266,7 +273,17 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     let nextView = 0;
     let renameDialog: HTMLDialogElement | undefined;
     const text = options.renameLabels ?? renameLabels.en;
-    const persistence = multiView && options.layoutStorage;
+    const persistence = multiView && options.workspaceLayout;
+    const layoutStore = persistence ? persistence.store ?? createWorkspaceLayoutStore() : undefined;
+    /** Where the layout of the loaded project is saved, once that project is identified. */
+    let layoutSession: WorkspaceLayoutSession | undefined;
+    /** Counts project loads, so a lookup that ends after another project opened is dropped. */
+    let projectGeneration = 0;
+    let openingGeneration: number | undefined;
+    let projectLoading = false;
+    /** The shape of the layout the project opened with, which is not worth a record of its own. */
+    let initialShape: string | undefined;
+    let disposed = false;
     const window = document.defaultView;
     const documentWorkspace = multiView && getDocumentWorkspace(vm);
     let pendingRestore = Boolean(persistence);
@@ -277,10 +294,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     /** Panels that were in a separate window when the layout was saved, until the user reopens them. */
     const reopenable = new Map<string, SavedPopout>();
     const originalTargets = () => vm.runtime.targets.filter(target => target.isOriginal);
-    // Whether tabs stand in a column at the left of each split. It is the user's preference, kept apart from the layout.
-    const tabsKey = persistence ? persistence.key + '.tabs' : undefined;
+    // Whether tabs stand in a column at the left of each split. It is the user's preference for every project.
     let verticalTabs = false;
-    try { verticalTabs = Boolean(tabsKey) && persistence.storage.getItem(tabsKey) === 'left'; } catch { /* Storage can be unavailable. */ }
+    let tabsChosen = false;
 
     const dockview = createDockview(root, {
         theme: themeLight,
@@ -464,12 +480,15 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         return {...menu, init() {}};
     }
 
-    function setVerticalTabs(vertical: boolean) {
+    function setVerticalTabs(vertical: boolean, chosen = true) {
         verticalTabs = vertical;
         const position = vertical ? 'left' : 'top';
         dockview.updateOptions({defaultHeaderPosition: position});
         for (const group of dockview.groups) group.api.setHeaderPosition(position);
-        try { if (tabsKey) persistence.storage.setItem(tabsKey, position); } catch { /* Storage can be unavailable. */ }
+        if (chosen) {
+            tabsChosen = true;
+            layoutStore?.writeTabsPosition(position).catch(() => undefined);
+        }
         refreshSurfaces();
     }
 
@@ -861,10 +880,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         scheduleSave();
     }
 
-    function writeLayout() {
-        saveFrame = undefined;
+    /** The current workspace as it is saved, or nothing while it cannot be described yet. */
+    function captureLayout(): WorkspaceLayout | undefined {
         const targets = originalTargets();
-        if (!persistence || pendingRestore || syncing || !targets.length || persistence.isProjectLoading?.()) return;
+        if (!targets.length) return;
         const serialized = dockview.toJSON();
         if (serialized.grid.width <= 0 || serialized.grid.height <= 0) return;
         const docked = dockPopoutGroups(serialized.grid, serialized.activeGroup, serialized.popoutGroups);
@@ -889,13 +908,22 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             .map(popout => ({...popout, panels: popout.panels.filter(id =>
                 reopenable.get(id) === popout && views.has(id) && panels[id]?.kind === 'sprite')}))
             .filter(popout => popout.panels.length);
-        const snapshot: WorkspaceLayout = {version: 1, project: projectSignature(targets), ...saved,
+        return {version: 1, project: projectSignature(targets), ...saved,
             editingView: active?.id, panels, ...(popouts.length && {popouts})};
-        try { persistence.storage.setItem(persistence.key, JSON.stringify(snapshot)); } catch { /* Storage can be unavailable. */ }
+    }
+
+    function writeLayout() {
+        saveFrame = undefined;
+        if (!persistence || !layoutSession || pendingRestore || syncing || persistence.isProjectLoading?.()) return;
+        const snapshot = captureLayout();
+        if (!snapshot) return;
+        // Opening a project and leaving its tabs as they were is not worth a record that pushes out another project.
+        if (!layoutSession.saved && initialShape !== undefined && layoutShape(snapshot) === initialShape) return;
+        layoutSession.write(JSON.stringify(snapshot), snapshot.project).catch(() => undefined);
     }
 
     function scheduleSave() {
-        if (persistence && !pendingRestore && saveFrame === undefined) {
+        if (persistence && layoutSession && !pendingRestore && saveFrame === undefined) {
             saveFrame = window.requestAnimationFrame(writeLayout);
         }
     }
@@ -910,45 +938,101 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     function finishRestore() {
         pendingRestore = false;
         window.clearTimeout(restoreTimeout);
+        restoreTimeout = undefined;
+    }
+
+    /** The panels and splits of a layout, without sizes or selection, to tell whether the user changed it. */
+    function layoutShape(layout: WorkspaceLayout) {
+        type Node = WorkspaceLayout['grid']['root'];
+        const reference = (id: string) => layout.panels[id] ?? null;
+        const shape = (node: Node): unknown => Array.isArray(node.data) ? node.data.map(shape) :
+            node.data.views.map(reference);
+        return JSON.stringify([layout.grid.orientation, shape(layout.grid.root),
+            (layout.popouts ?? []).map(popout => popout.panels.map(reference))]);
+    }
+
+    function identifyProject(): WorkspaceProjectIdentity {
+        try {
+            const identity = persistence && persistence.identify?.();
+            if (identity) return identity;
+        } catch { /* The project is still known by its name and sprites. */ }
+        return {kind: 'anonymous', name: ''};
+    }
+
+    /** Find where the loaded project keeps its layout. It runs once for each project load. */
+    function openLayoutSession(signature: string) {
+        if (!layoutStore || openingGeneration === projectGeneration) return;
+        const generation = openingGeneration = projectGeneration;
+        layoutStore.open(identifyProject(), signature).then(session => {
+            if (disposed || generation !== projectGeneration) return;
+            layoutSession = session;
+            scheduleRestore();
+        }, () => {
+            // Without IndexedDB, the project opens with the default layout and nothing is saved.
+            if (!disposed && generation === projectGeneration) finishRestore();
+        });
+    }
+
+    /** Keep the layout the project opened with, so leaving it unchanged adds no record. */
+    function keepInitialLayout() {
+        const layout = captureLayout();
+        initialShape = layout && layoutShape(layout);
+        finishRestore();
     }
 
     function restoreLayout() {
         restoreFrame = undefined;
-        if (!pendingRestore || !persistence || persistence.isProjectLoading?.()) return;
+        if (!persistence || persistence.isProjectLoading?.()) return;
         const targets = originalTargets();
         if (!targets.length || !vm.editingTarget) return;
+        const signature = projectSignature(targets);
+        if (!layoutSession) return openLayoutSession(signature);
+        if (!pendingRestore) return;
         reopenable.clear();
-        let stored: WorkspaceLayout | undefined;
-        try {
-            const raw = persistence.storage.getItem(persistence.key);
-            if (raw) stored = readWorkspaceLayout(raw, projectSignature(targets));
-        } catch { /* Storage can be unavailable. */ }
-        if (!stored) return finishRestore();
+        // A project found by its file, folder or desktop key keeps its tabs even after its sprites were renamed.
+        const exact = layoutSession.exact;
+        const raw = layoutSession.layout;
+        const stored = raw ? readWorkspaceLayout(raw, exact ? undefined : signature) : undefined;
+        if (!stored) return keepInitialLayout();
         const resolvedSprites = new Map<string, View<Snapshot>>();
         const resolvedDocuments = new Map<string, DocumentPanelRequest>();
         const panels: SerializedDockview['panels'] = Object.create(null);
+        const dropped = new Set<string>();
         for (const [id, reference] of Object.entries(stored.panels)) {
             if (reference.kind === 'sprite') {
                 const target = targets.find(item => item.isStage === reference.stage && targetName(item) === reference.name);
-                if (!target || id === stagePanelId || !sectionAvailable(reference.section)) return finishRestore();
+                if (id === stagePanelId) return keepInitialLayout();
+                if (!target || !sectionAvailable(reference.section)) {
+                    if (!exact) return keepInitialLayout();
+                    dropped.add(id);
+                    continue;
+                }
                 resolvedSprites.set(id, {id, target, section: reference.section, number: reference.number,
                     assets: createAssetSelections(target, locale)});
                 panels[id] = {id, contentComponent: 'sprite', params: {icon: getIcon(target)}};
             } else if (reference.kind === 'stage') {
-                if (!stagePane || id !== stagePanelId) return finishRestore();
+                if (id !== stagePanelId) return keepInitialLayout();
+                if (!stagePane) {
+                    if (!exact) return keepInitialLayout();
+                    dropped.add(id);
+                    continue;
+                }
                 panels[id] = {id, title: stagePane.title, contentComponent: stagePanelId, renderer: 'always'};
             } else {
-                if (id === stagePanelId) return finishRestore();
+                if (id === stagePanelId) return keepInitialLayout();
                 const request = documentWorkspace && documentWorkspace.resolve(reference);
                 if (!request) {
                     // The project can finish loading before the Blockly host publishes its document catalog.
-                    restoreTimeout ??= window.setTimeout(finishRestore, 2000);
+                    restoreTimeout ??= window.setTimeout(keepInitialLayout, 2000);
                     return;
                 }
                 resolvedDocuments.set(id, request);
                 panels[id] = {id, title: documentPanelTitle(request), contentComponent: documentComponent, renderer: 'always'};
             }
         }
+        const kept = workspaceWithoutTransientPanels(stored.grid, stored.activeGroup, dropped, stored.editingView);
+        if (!kept) return keepInitialLayout();
+        const editingView = stored.editingView && !dropped.has(stored.editingView) ? stored.editingView : undefined;
         assignTabNumbers(resolvedSprites.values(), new Set([...targets.map(baseTitle),
             ...Object.values(panels).map(panel => panel.title)]));
         for (const [id, view] of resolvedSprites) panels[id].title = tabTitle(view);
@@ -961,12 +1045,12 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             closed = new WeakSet(targets.filter(target => !represented.has(target)));
             for (const [id, view] of resolvedSprites) views.set(id, view);
             for (const [id, request] of resolvedDocuments) documents.set(id, {request});
-            dockview.fromJSON({grid: stored.grid, activeGroup: stored.activeGroup, panels});
+            dockview.fromJSON({grid: kept.grid, activeGroup: kept.activeGroup, panels});
             for (const popout of stored.popouts ?? []) {
                 for (const id of popout.panels) if (views.has(id)) reopenable.set(id, popout);
             }
             const selected = dockview.activePanel;
-            show(views.has(selected?.id) ? selected : dockview.getPanel(stored.editingView) ?? selected);
+            show(views.has(selected?.id) ? selected : (editingView && dockview.getPanel(editingView)) ?? selected);
         } catch {
             dockview.clear();
             for (const view of views.values()) disposeView(view);
@@ -981,7 +1065,26 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     }
 
     function scheduleRestore() {
-        if (pendingRestore && restoreFrame === undefined) restoreFrame = window.requestAnimationFrame(restoreLayout);
+        if (persistence && (pendingRestore || !layoutSession) && restoreFrame === undefined) {
+            restoreFrame = window.requestAnimationFrame(restoreLayout);
+        }
+    }
+
+    /** Each loaded project has its own layout, so a new load reopens the tabs that project was left with. */
+    function projectChanged() {
+        const loading = Boolean(persistence && persistence.isProjectLoading?.());
+        if (loading && !projectLoading) {
+            projectGeneration++;
+            layoutSession = undefined;
+            initialShape = undefined;
+            pendingRestore = true;
+            if (saveFrame !== undefined) window.cancelAnimationFrame(saveFrame);
+            saveFrame = undefined;
+            window.clearTimeout(restoreTimeout);
+            restoreTimeout = undefined;
+        }
+        projectLoading = loading;
+        scheduleRestore();
     }
 
     function refresh() {
@@ -1060,7 +1163,11 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     });
     const disconnectDocuments = documentWorkspace && documentWorkspace.connect(openDocument);
     const unsubscribeDocuments = persistence && documentWorkspace && documentWorkspace.subscribe(scheduleRestore);
-    const unsubscribeProject = persistence && persistence.subscribeProject?.(scheduleRestore);
+    projectLoading = Boolean(persistence && persistence.isProjectLoading?.());
+    const unsubscribeProject = persistence && persistence.subscribeProject?.(projectChanged);
+    layoutStore?.readTabsPosition().then(position => {
+        if (!disposed && !tabsChosen && position === 'left') setVerticalTabs(true, false);
+    }, () => undefined);
     if (persistence) window.addEventListener('pagehide', flushLayout);
     root.addEventListener('click', guardDocumentClose, true);
     root.addEventListener('keydown', guardDocumentClose, true);
@@ -1082,6 +1189,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         views: () => [...views.values()].map(view => describe(view)),
         dispose() {
             flushLayout();
+            disposed = true;
             window.cancelAnimationFrame(restoreFrame);
             window.clearTimeout(restoreTimeout);
             if (persistence) window.removeEventListener('pagehide', flushLayout);
@@ -1237,7 +1345,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
             resize: () => latest.current.resize(),
             reopenLabel: props.reopenLabel,
             multiView: props.multiView,
-            layoutStorage: props.layoutStorage,
+            workspaceLayout: props.workspaceLayout,
             stagePane: props.stagePane,
             variables: hasVariables,
             messages: hasMessages,
@@ -1258,7 +1366,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
             instance.dispose();
         };
     }, [content, props.enabled, props.vm, props.reopenLabel, props.multiView, props.locale,
-        props.viewAdapter, props.stagePane, props.layoutStorage, props.renameLabels, props.popouts, props.className,
+        props.viewAdapter, props.stagePane, props.workspaceLayout, props.renameLabels, props.popouts, props.className,
         hasVariables, hasMessages, hasToolbar, hasAssetPreview]);
     React.useLayoutEffect(() => {
         controller.current?.syncActiveSection(props.activeSection);
