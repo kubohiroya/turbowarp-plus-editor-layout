@@ -71,6 +71,28 @@ aiAgents.openSettings({locale, returnFocus: trigger});
 - ダイアログ（`role="dialog"`、`aria-modal`）は React を使わない DOM で、`openAgentSettingsDialog` で開ける。開くと最初の欄に移り、Tab はダイアログの中を回る。Escape かキャンセルで保存せずに閉じ、`returnFocus`、なければ開く前の要素に戻る。
 - 設定は `localStorage` の `twPlusAiAgents` に `{"version": 1, "services": [...]}` で保存する。各サービスの `target` は `kind: "url"`。ほかの `kind` は後の段階のためにあけてあり、いまは読み飛ばす。ない・壊れた・誤ったデータは、項目ごとに既定に戻す。
 
+## Dockview のレイアウトの保存
+
+ホストが `workspaceLayout` を渡すと、`useSpriteTabs` と `mountSpriteTabs` は作品ごとの Dockview のレイアウトを IndexedDB に保存する。分割、各タブのスプライトと区分、ステージとドキュメントのタブ、編集中のタブ、別ウィンドウにあったタブを、次にその作品を開いたときに再現する。
+
+```js
+workspaceLayout: {
+    // 読み込んだ作品のファイルやフォルダーのハンドル、またはデスクトップ版のキー。無ければ名前で見分ける。
+    identify: () => ({kind: 'file', name: handle.name, handle}),
+    isProjectLoading: () => loading,
+    subscribeProject: listener => subscribe(listener)
+}
+```
+
+- 作品は、ファイルやフォルダー（`kind: 'file' | 'directory'`）なら `FileSystemHandle.isSameEntry()` で、デスクトップ版（`kind: 'desktop'`）なら `key` で、どちらも無ければ名前とスプライトの組み合わせ（`kind: 'anonymous'`）で見分ける。ハンドルかキーで見つかった作品は、スプライト名を変えてもタブを再現し、無くなったスプライトのタブだけを外す。名前で見分けた作品は、スプライトが変わっていれば既定のレイアウトで開く。
+- 作品を読み込むたびに、その作品のレイアウトを再現する。作品ごとの記録は、何度変更しても 1 件にとどめる。
+- 開いたときのレイアウトから変わるまでは記録を作らない。大きさと選択中のタブの違いだけでは変わったとみなさない。
+- 最後に使ったのが新しい順に 100 件を残す。開いただけでも使ったとみなす。古い記録は新しい記録を作るときに消す。256 KB を超えるレイアウトは保存しない。
+- タブの位置（上／左）は全作品で共通の設定にする。
+- IndexedDB が使えないときは既定のレイアウトで開き、何も保存しない。
+- すべてのレイアウトを消すには、ブラウザーの開発者ツールで `twPlusWorkspaceLayout` データベースを削除する（Chrome では Application の IndexedDB）。コンソールで `indexedDB.deleteDatabase('twPlusWorkspaceLayout')` を実行してもよい。
+- 以前の版は `localStorage`（`twPlusDockviewLayout` と `twPlusDockviewLayout.tabs`）に 1 件だけ保存していた。これらのキーは移さずに消す。
+
 ## 検証
 
 `npm test` で配分・縦横比・設定の読み書きを、`npm run test:browser` で独立した試験用ホストを検証する。試験用ホストを手動で開くには、このディレクトリで `npm install` と `python3 -m http.server` を実行し、`/example/` を表示する。

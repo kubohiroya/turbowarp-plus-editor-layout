@@ -123,12 +123,16 @@ const size = (value: unknown): value is number =>
 const record = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Rebuild only the supported docked grid and logical panel references from storage. */
-export function readWorkspaceLayout(raw: string, project: string): WorkspaceLayout | undefined {
-    if (raw.length > 1024 * 1024) return;
+/**
+ * Rebuild only the supported docked grid and logical panel references from storage. Without `project`, a layout
+ * of any project is read; it is for a project already found by its file, folder or desktop key.
+ */
+export function readWorkspaceLayout(raw: string, project?: string): WorkspaceLayout | undefined {
+    if (raw.length > 256 * 1024) return;
     let input: unknown;
     try { input = JSON.parse(raw); } catch { return; }
-    if (!record(input) || input.version !== 1 || input.project !== project || !record(input.grid) ||
+    if (!record(input) || input.version !== 1 || typeof input.project !== 'string' ||
+        (project !== undefined && input.project !== project) || !record(input.grid) ||
         !record(input.panels) || !validId(input.activeGroup)) return;
     const {width, height, orientation} = input.grid;
     if (!size(width) || !width || !size(height) || !height ||
@@ -187,7 +191,7 @@ export function readWorkspaceLayout(raw: string, project: string): WorkspaceLayo
     if (editingView !== undefined && (!validId(editingView) || panels[editingView]?.kind !== 'sprite')) return;
     const popouts = readPopouts(input.popouts, panels);
     if (!popouts) return;
-    return {version: 1, project, grid: {root, width, height, orientation}, activeGroup: input.activeGroup,
+    return {version: 1, project: input.project, grid: {root, width, height, orientation}, activeGroup: input.activeGroup,
         editingView: typeof editingView === 'string' ? editingView : undefined, panels,
         ...(popouts.length && {popouts})};
 }

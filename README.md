@@ -73,6 +73,28 @@ aiAgents.openSettings({locale, returnFocus: trigger});
 - The dialog (`role="dialog"`, `aria-modal`) is plain DOM, so it can be opened without React (`openAgentSettingsDialog`). It focuses its first field, keeps Tab inside, closes on Escape or Cancel without saving, and returns focus to `returnFocus` or to the element focused before.
 - The settings are saved in `localStorage` under `twPlusAiAgents` as `{"version": 1, "services": [...]}`. Each service has a `target` of `kind: "url"`; other kinds are left for later and ignored for now. Missing, broken or invalid data falls back entry by entry to the presets.
 
+## Saved Dockview layout
+
+`useSpriteTabs` and `mountSpriteTabs` keep the Dockview workspace of each project in IndexedDB when the host passes `workspaceLayout`. The splits, the sprite and section of each tab, the stage and document tabs, the edited tab and the separate windows tabs were in come back the next time that project opens.
+
+```js
+workspaceLayout: {
+    // The file or folder handle, or the desktop key, of the loaded project. Without one it is known by its name.
+    identify: () => ({kind: 'file', name: handle.name, handle}),
+    isProjectLoading: () => loading,
+    subscribeProject: listener => subscribe(listener)
+}
+```
+
+- A project is found by `FileSystemHandle.isSameEntry()` for a file or folder (`kind: 'file' | 'directory'`), by `key` for the desktop app (`kind: 'desktop'`), or by its name together with its sprites (`kind: 'anonymous'`). A project found by its handle or key keeps its tabs after its sprites are renamed; tabs of sprites it no longer has are left out. A project found by its name opens with the default layout when its sprites changed.
+- Each load of a project reopens the layout of that project. A project keeps one record however often it changes.
+- A record is made only once the layout differs from the one the project opened with. Sizes and the selected tab alone do not count.
+- The 100 most recently used projects keep their layout; opening a project counts as using it. Older records are removed when a new one is made. A layout over 256 KB is not saved.
+- The tab position (top or left) is one preference for every project.
+- Without IndexedDB, projects open with the default layout and nothing is saved.
+- To forget every layout, delete the `twPlusWorkspaceLayout` database from the browser's developer tools (in Chrome: Application, then IndexedDB), or run `indexedDB.deleteDatabase('twPlusWorkspaceLayout')` in the console.
+- Earlier versions kept a single layout in `localStorage` (`twPlusDockviewLayout` and `twPlusDockviewLayout.tabs`). Those keys are removed without being moved.
+
 ## Verification
 
 Run `npm test` to verify split sizing, aspect ratios, and settings persistence. Run `npm run test:browser` to test the standalone host. To open the test host manually, run `npm install` and `python3 -m http.server` in this directory, then open `/example/`.
