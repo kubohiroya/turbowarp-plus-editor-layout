@@ -90,6 +90,7 @@ workspaceLayout: {
 - 最後に使ったのが新しい順に 100 件を残す。開いただけでも使ったとみなす。古い記録は新しい記録を作るときに消す。256 KB を超えるレイアウトは保存しない。
 - タブの位置（上／左）は全作品で共通の設定にする。
 - IndexedDB が使えないときは既定のレイアウトで開き、何も保存しない。
+- IndexedDB の応答は非同期なので、保存と再現は変更より後に終わる。`controller.layoutSettled()` は、読み込んだ作品のレイアウトの再現、タブの位置の読み込み、すべての変更の書き込みが終わると解決する。同じ状態を作業領域の要素の `data-workspace-layout`（`"pending"` または `"settled"`）にも示すので、ブラウザーテストは記録が現れるまでデータベースを読み直すのではなく、この属性を待つ。
 - すべてのレイアウトを消すには、ブラウザーの開発者ツールで `twPlusWorkspaceLayout` データベースを削除する（Chrome では Application の IndexedDB）。コンソールで `indexedDB.deleteDatabase('twPlusWorkspaceLayout')` を実行してもよい。
 - 以前の版は `localStorage`（`twPlusDockviewLayout` と `twPlusDockviewLayout.tabs`）に 1 件だけ保存していた。これらのキーは移さずに消す。
 

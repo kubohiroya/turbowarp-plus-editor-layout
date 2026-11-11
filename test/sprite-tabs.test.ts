@@ -394,10 +394,6 @@ function memoryLayoutStore(layouts: Record<string, string> = {}, exact = true) {
     return {store, opened, writes, tabs: () => tabs};
 }
 
-const settle = async () => {
-    for (let index = 0; index < 4; index++) await new Promise(resolve => setTimeout(resolve, 20));
-};
-
 function spriteTarget(id: string, name: string) {
     return {id, isOriginal: true, isStage: false, getName: () => name,
         getCurrentCostume: () => ({asset: {encodeDataURI: () => `/${id}.svg`}})};
@@ -425,7 +421,7 @@ test('a project found by its file reopens its splits and leaves out sprites it n
         workspaceLayout: {store, identify: () => ({kind: 'anonymous', name: 'Game.sb3'})}
     });
     try {
-        await settle();
+        await controller.layoutSettled();
         const groups = [...root.querySelectorAll('.dv-groupview')].map(group =>
             [...group.querySelectorAll('.dv-tab')].map(tab => tab.textContent));
         assert.deepEqual(groups, [['First'], ['First(2)']], 'the split of the renamed sprite is left out');
@@ -445,7 +441,7 @@ test('a project found only by its name and sprites opens with the default layout
         workspaceLayout: {store, identify: () => ({kind: 'anonymous', name: 'Game'})}
     });
     try {
-        await settle();
+        await controller.layoutSettled();
         assert.equal(root.querySelectorAll('.dv-groupview').length, 1);
     } finally {
         controller.dispose();
@@ -471,7 +467,7 @@ test('each project that loads reopens the layout it was left with', async t => {
     });
     const notify = () => { for (const listener of listeners) listener(); };
     try {
-        await settle();
+        await controller.layoutSettled();
         assert.deepEqual(opened, ['a.sb3']);
         assert.equal(root.querySelectorAll('.dv-groupview').length, 1);
 
@@ -484,11 +480,55 @@ test('each project that loads reopens the layout it was left with', async t => {
         vm.emit('targetsUpdate');
         loading = false;
         notify();
-        await settle();
+        await controller.layoutSettled();
         assert.deepEqual(opened, ['a.sb3', 'b.sb3']);
         const groups = [...root.querySelectorAll('.dv-groupview')].map(group =>
             [...group.querySelectorAll('.dv-tab')].map(tab => tab.textContent));
         assert.deepEqual(groups, [['Hero'], ['Enemy']]);
+    } finally {
+        controller.dispose();
+    }
+});
+
+test('a host can wait until the restored layout and every change are saved', async t => {
+    const document = setupDom(t);
+    const first = spriteTarget('first', 'First');
+    const vm = Object.assign(new EventEmitter(), {runtime: {targets: [first]}, editingTarget: first});
+    const root = document.querySelector('main');
+    const written: string[] = [];
+    let started = 0;
+    let finishWrites: () => void;
+    const released = new Promise<void>(resolve => { finishWrites = resolve; });
+    const store = {
+        async open() {
+            return {layout: undefined, exact: false, saved: true, async write(raw: string) {
+                started++;
+                await released;
+                written.push(raw);
+            }};
+        },
+        async readTabsPosition() { return undefined; },
+        async writeTabsPosition() {}
+    };
+    const controller = mountSpriteTabs(root, document.createElement('div'), {
+        vm, multiView: true, getSection: () => 0, activateSection() {}, selectTarget() {}, resize() {}, reopenLabel: 'Reopen',
+        workspaceLayout: {store, identify: () => ({kind: 'anonymous', name: 'Game'})}
+    });
+    try {
+        await controller.layoutSettled();
+        assert.equal(root.dataset.workspaceLayout, 'settled');
+        controller.split('right');
+        let settled = false;
+        const waiting = controller.layoutSettled().then(() => { settled = true; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(root.dataset.workspaceLayout, 'pending');
+        assert.equal(settled, false, 'the write is still in the store');
+        assert.ok(started > 0);
+        finishWrites!();
+        await waiting;
+        assert.equal(written.length, started, 'every write had finished');
+        assert.equal(JSON.parse(written.at(-1)!).grid.root.data.length, 2, 'the saved layout has the new split');
+        assert.equal(root.dataset.workspaceLayout, 'settled');
     } finally {
         controller.dispose();
     }
@@ -528,7 +568,7 @@ test('the layout menu stands the tabs of every split in a column and remembers t
     root.replaceChildren();
     controller = mount();
     try {
-        await settle();
+        await controller.layoutSettled();
         assert.ok(positions().every(position => position === 'left'), 'a new workspace keeps the column');
         assert.deepEqual(layouts.writes, [], 'the tab position is not written over a layout');
     } finally {

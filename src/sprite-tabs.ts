@@ -290,6 +290,12 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     let restoreFrame: number | undefined;
     let restoreTimeout: number | undefined;
     let saveFrame: number | undefined;
+    /** Layout writes handed to the store that have not finished yet. */
+    let layoutWrites = 0;
+    /** Whether the tab position chosen for every project is still being read. */
+    let readingTabs = Boolean(layoutStore);
+    let lastWrite: Promise<unknown> = Promise.resolve();
+    const settledWaiters: (() => void)[] = [];
     const openingGroups = new Set<string>();
     /** Panels that were in a separate window when the layout was saved, until the user reopens them. */
     const reopenable = new Map<string, SavedPopout>();
@@ -914,18 +920,60 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
 
     function writeLayout() {
         saveFrame = undefined;
-        if (!persistence || !layoutSession || pendingRestore || syncing || persistence.isProjectLoading?.()) return;
-        const snapshot = captureLayout();
-        if (!snapshot) return;
-        // Opening a project and leaving its tabs as they were is not worth a record that pushes out another project.
-        if (!layoutSession.saved && initialShape !== undefined && layoutShape(snapshot) === initialShape) return;
-        layoutSession.write(JSON.stringify(snapshot), snapshot.project).catch(() => undefined);
+        try {
+            if (!persistence || !layoutSession || pendingRestore || syncing || persistence.isProjectLoading?.()) return;
+            const snapshot = captureLayout();
+            if (!snapshot) return;
+            // Opening a project and leaving its tabs as they were is not worth a record that pushes out another project.
+            if (!layoutSession.saved && initialShape !== undefined && layoutShape(snapshot) === initialShape) return;
+            layoutWrites++;
+            lastWrite = layoutSession.write(JSON.stringify(snapshot), snapshot.project).catch(() => undefined).finally(() => {
+                layoutWrites--;
+                updateLayoutState();
+            });
+        } finally {
+            updateLayoutState();
+        }
     }
 
     function scheduleSave() {
         if (persistence && layoutSession && !pendingRestore && saveFrame === undefined) {
             saveFrame = window.requestAnimationFrame(writeLayout);
+            updateLayoutState();
         }
+    }
+
+    const layoutBusy = () => !disposed && (pendingRestore || readingTabs || saveFrame !== undefined || layoutWrites > 0);
+
+    /**
+     * Tell the host and its tests when the layout of the loaded project is restored and every change is saved.
+     * Dockview reports a layout change in a microtask after the change, so being idle is confirmed only after
+     * that report had its chance to schedule a save.
+     */
+    function updateLayoutState() {
+        if (!persistence) return;
+        if (layoutBusy()) {
+            root.dataset.workspaceLayout = 'pending';
+            return;
+        }
+        queueMicrotask(() => {
+            if (layoutBusy()) return;
+            root.dataset.workspaceLayout = 'settled';
+            for (const resolve of settledWaiters.splice(0)) resolve();
+        });
+    }
+
+    /** Resolves once the loaded project's layout is restored and its changes are written to the store. */
+    function layoutSettled() {
+        if (!persistence) return Promise.resolve();
+        if (saveFrame !== undefined) {
+            window.cancelAnimationFrame(saveFrame);
+            writeLayout();
+        }
+        return new Promise<void>(resolve => {
+            settledWaiters.push(resolve);
+            updateLayoutState();
+        }).then(() => lastWrite).then(() => undefined);
     }
 
     function flushLayout() {
@@ -939,6 +987,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         pendingRestore = false;
         window.clearTimeout(restoreTimeout);
         restoreTimeout = undefined;
+        updateLayoutState();
     }
 
     /** The panels and splits of a layout, without sizes or selection, to tell whether the user changed it. */
@@ -1082,6 +1131,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             saveFrame = undefined;
             window.clearTimeout(restoreTimeout);
             restoreTimeout = undefined;
+            updateLayoutState();
         }
         projectLoading = loading;
         scheduleRestore();
@@ -1167,15 +1217,19 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const unsubscribeProject = persistence && persistence.subscribeProject?.(projectChanged);
     layoutStore?.readTabsPosition().then(position => {
         if (!disposed && !tabsChosen && position === 'left') setVerticalTabs(true, false);
-    }, () => undefined);
+    }, () => undefined).finally(() => {
+        readingTabs = false;
+        updateLayoutState();
+    });
     if (persistence) window.addEventListener('pagehide', flushLayout);
+    updateLayoutState();
     root.addEventListener('click', guardDocumentClose, true);
     root.addEventListener('keydown', guardDocumentClose, true);
     vm.on('targetsUpdate', refresh);
     refresh();
     return {
         select, selectFromList, targetTabs, openStage, closeStage, split, closeSplit, activateView,
-        setViewSection, syncActiveSection, refreshSurfaces,
+        setViewSection, syncActiveSection, refreshSurfaces, layoutSettled,
         rename(id: string) {
             const target = vm.runtime.targets.find(item => item.id === id);
             if (target) openRenameDialog(target);
@@ -1190,6 +1244,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         dispose() {
             flushLayout();
             disposed = true;
+            for (const resolve of settledWaiters.splice(0)) resolve();
             window.cancelAnimationFrame(restoreFrame);
             window.clearTimeout(restoreTimeout);
             if (persistence) window.removeEventListener('pagehide', flushLayout);
