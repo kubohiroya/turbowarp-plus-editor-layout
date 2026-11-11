@@ -92,6 +92,7 @@ workspaceLayout: {
 - The 100 most recently used projects keep their layout; opening a project counts as using it. Older records are removed when a new one is made. A layout over 256 KB is not saved.
 - The tab position (top or left) is one preference for every project.
 - Without IndexedDB, projects open with the default layout and nothing is saved.
+- Saving and restoring finish later than the change, because IndexedDB answers asynchronously. `controller.layoutSettled()` resolves once the loaded project's layout is restored, the tab position is read and every change is written. The workspace element carries the same state as `data-workspace-layout="pending"` or `"settled"`, so a browser test waits for that attribute instead of reading the database until the record appears.
 - To forget every layout, delete the `twPlusWorkspaceLayout` database from the browser's developer tools (in Chrome: Application, then IndexedDB), or run `indexedDB.deleteDatabase('twPlusWorkspaceLayout')` in the console.
 - Earlier versions kept a single layout in `localStorage` (`twPlusDockviewLayout` and `twPlusDockviewLayout.tabs`). Those keys are removed without being moved.
 
