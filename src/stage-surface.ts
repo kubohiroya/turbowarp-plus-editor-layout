@@ -103,7 +103,8 @@ export function stageDockActionLabel(locale: string, {drawer, detached, external
 }
 
 type StagePlacement = Pick<NonNullable<ReturnType<typeof useDockviewStage>>, 'surface' | 'inlineRef' | 'docked'> &
-    Partial<Pick<NonNullable<ReturnType<typeof useDockviewStage>>, 'commands'>>;
+    Partial<Pick<NonNullable<ReturnType<typeof useDockviewStage>>,
+        'commands' | 'drawerLayout' | 'updateDrawer' | 'resetDrawerPresentation'>>;
 
 export function createStageSurface(React: typeof import('react'), {
     context, EdgeDrawer, Panel
@@ -132,6 +133,13 @@ export function createStageSurface(React: typeof import('react'), {
         const [drawerOpen, setDrawerOpen] = React.useState(false);
         const localDrawerRef = React.useRef<() => void>(null);
         const focusDrawer = openDrawerRef ?? localDrawerRef;
+        const updateDrawer = placement?.updateDrawer;
+        const resetDrawerPresentation = placement?.resetDrawerPresentation;
+        const drawerLayout = placement?.drawerLayout;
+        const stageOutsideDrawer = Boolean(editorFullscreen || dockAction?.kind === 'external' || placement?.docked);
+        React.useLayoutEffect(() => {
+            if (stageOutsideDrawer) resetDrawerPresentation?.();
+        }, [stageOutsideDrawer, resetDrawerPresentation, drawerLayout?.open, drawerLayout?.selected]);
         const onOpenChange = React.useCallback((open: boolean) => {
             setStageDrawerOpen?.(open);
             setDrawerOpen(open);
@@ -156,6 +164,8 @@ export function createStageSurface(React: typeof import('react'), {
             edge: 'right',
             movableStage: true,
             available: !placement?.docked && (!dockAction || dockAction.kind === 'docked'),
+            stageDrawerLayout: drawerLayout,
+            updateStageDrawer: updateDrawer,
             label: japanese ? 'ステージを展開' : 'Reveal stage',
             onOpenChange,
             focusPanelRef: launcher ? focusDrawer : undefined,
@@ -170,6 +180,7 @@ export function createStageSurface(React: typeof import('react'), {
             locale, options: launcher, dockAction,
             tab: placement?.commands ? {docked: placement.docked, commands: placement.commands} : undefined,
             drawerOpen: stageDrawer && drawerOpen && !stageHidden,
+            savedDrawerSelected: updateDrawer ? Boolean(drawerLayout?.selected) : undefined,
             editorFullscreen,
             focusDrawer: () => focusDrawer.current?.(),
             revealStage: () => {if (stageHidden) setStageVisible?.(true);}

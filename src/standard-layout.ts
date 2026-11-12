@@ -3,6 +3,7 @@ import {createTargetList} from './targets.ts';
 import type {DrawerViews} from './drawer-views.ts';
 import {availableDrawerViews, createDrawerViewBar, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
 import {attachStageDrawerDrag} from './stage-drawer-drag.ts';
+import type {StageDrawerLayout, StageDrawerPosition} from './workspace-layout.ts';
 
 export type {DrawerMenu, DrawerMenuRenderProps, DrawerRenderProps, DrawerView, DrawerViewId, DrawerViews,
     HostDrawerViewId} from './drawer-views.ts';
@@ -25,7 +26,9 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
 
     function StandardLayout({
         enabled, splitter, windowLayout, stageActionEnabled, stageDrawer = false,
-        onPaletteModeChange, windowTools, Container, render, drawerViews = undefined as DrawerViews | undefined, ...props
+        onPaletteModeChange, windowTools, Container, render, drawerViews = undefined as DrawerViews | undefined,
+        stageDrawerLayout = undefined as StageDrawerLayout | undefined,
+        updateStageDrawer = undefined as ((patch: Partial<StageDrawerLayout>) => void) | undefined, ...props
     }) {
         const [showUndock, setShowUndock] = useState(false);
         const [targetsPinned, setTargetsPinned] = useState(true);
@@ -82,9 +85,12 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             ((size?.height ?? 640) - 112) * props.stageAspect)));
         const defaultStageWidth = Math.min(maximumStageWidth, Math.floor(Math.min(props.defaultStageWidth, 360, bodyWidth / 2)));
         const minimumStageWidth = Math.min(defaultStageWidth, 280);
-        const stageWidth = Math.max(minimumStageWidth, Math.min(maximumStageWidth, preferredStageWidth ?? defaultStageWidth));
+        const preferredWidth = stageDrawer && updateStageDrawer ? stageDrawerLayout?.width : preferredStageWidth;
+        const resizeStage = stageDrawer && updateStageDrawer ?
+            (width: number | undefined) => updateStageDrawer({width}) : setPreferredStageWidth;
+        const stageWidth = Math.max(minimumStageWidth, Math.min(maximumStageWidth, preferredWidth ?? defaultStageWidth));
         const stageResize = plusLayout && maximumStageWidth > minimumStageWidth ?
-            {minimum: minimumStageWidth, maximum: maximumStageWidth, resize: setPreferredStageWidth} : null;
+            {minimum: minimumStageWidth, maximum: maximumStageWidth, resize: resizeStage} : null;
 
         useLayoutEffect(() => {
             if (enabled) onPaletteModeChange?.(true);
@@ -160,7 +166,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                 targetClassName: targetsPinned ? styles.standardTargets :
                     `${styles.standardTargets} ${styles.retractedTargets}`,
                 stageDisplayWidth: stageWidth,
-                handleStagePreset: () => setPreferredStageWidth(null),
+                handleStagePreset: () => resizeStage(undefined),
                 editorWidth: targetsPinned && resizable ? targetSplit.second : size?.width
             };
         };
@@ -190,22 +196,31 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
 
     function EdgeDrawer({edge, label, pinned = false, onOpenChange, portalContent = false, holdOpenSelector = '',
         focusPanelRef = undefined, closePanelRef = undefined, focusBoundary = undefined, showTrigger = true,
-        movableStage = false, available = true, children}) {
+        movableStage = false, available = true, stageDrawerLayout = undefined as StageDrawerLayout | undefined,
+        updateStageDrawer = undefined as ((patch: Partial<StageDrawerLayout>) => void) | undefined, children}) {
         const [hovered, setHovered] = useState(false);
-        const [engaged, setEngaged] = useState(false);
+        const [localEngaged, setLocalEngaged] = useState(false);
         const [heldOpen, setHeldOpen] = useState(false);
         const drawer = useRef(null);
         const trigger = useRef(null);
         const panel = useRef(null);
         const opened = useRef(false);
-        const open = available && (pinned || hovered || engaged || heldOpen);
-        const stageTrigger = movableStage && available && (showTrigger || opened.current);
+        const stageDrag = useRef(null);
+        const engaged = updateStageDrawer ? Boolean(stageDrawerLayout?.open) : localEngaged;
+        const setEngaged = React.useCallback((engaged: boolean) => {
+            if (updateStageDrawer) updateStageDrawer({open: engaged, ...(engaged && {selected: true})});
+            else setLocalEngaged(engaged);
+        }, [updateStageDrawer]);
+        const selected = updateStageDrawer ? Boolean(stageDrawerLayout?.selected) : opened.current;
+        const open = available && (pinned || engaged || heldOpen ||
+            (hovered && (!updateStageDrawer || showTrigger || selected)));
+        const stageTrigger = movableStage && available && (showTrigger || selected);
 
         useLayoutEffect(() => {
             if (open) opened.current = true;
             if (!available) {
                 setHovered(false);
-                setEngaged(false);
+                setLocalEngaged(false);
             }
         }, [open, available]);
 
@@ -215,8 +230,17 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             const stage = node.closest<HTMLElement>(`.${styles.stageDrawer}`);
             const editor = stage?.closest<HTMLElement>(`.${styles.standardBody}`);
             if (!editor || !node.ownerDocument.defaultView?.ResizeObserver) return;
-            return attachStageDrawerDrag(node, stage, editor, () => panel.current.focus({preventScroll: true}));
-        }, [movableStage]);
+            const controller = attachStageDrawerDrag(node, stage, editor, () => panel.current.focus({preventScroll: true}),
+                (position: StageDrawerPosition) => updateStageDrawer?.({position}));
+            stageDrag.current = controller;
+            return () => {
+                stageDrag.current = null;
+                controller.dispose();
+            };
+        }, [movableStage, updateStageDrawer]);
+        useLayoutEffect(() => {
+            stageDrag.current?.setPosition(stageDrawerLayout?.position);
+        }, [movableStage, stageDrawerLayout?.position, updateStageDrawer]);
 
         useLayoutEffect(() => {
             if (!holdOpenSelector) return;
@@ -267,7 +291,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (!focusPanelRef) return;
             focusPanelRef.current = focusPanel;
             return () => {focusPanelRef.current = null;};
-        }, [focusPanelRef, available]);
+        }, [focusPanelRef, available, setEngaged]);
 
         const closePanel = React.useCallback(() => {
             setHovered(false);
@@ -276,7 +300,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (button?.disabled) {
                 button.ownerDocument.defaultView?.requestAnimationFrame(() => button.focus({preventScroll: true}));
             } else button?.focus({preventScroll: true});
-        }, [focusBoundary, showTrigger]);
+        }, [focusBoundary, showTrigger, setEngaged]);
         useLayoutEffect(() => {
             if (!closePanelRef || !open) return;
             closePanelRef.current = closePanel;
@@ -293,7 +317,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (!focusBoundary) return;
             focusBoundary.addEventListener('focusout', blur);
             return () => focusBoundary.removeEventListener('focusout', blur);
-        }, [focusBoundary]);
+        }, [focusBoundary, setEngaged]);
 
         useLayoutEffect(() => {
             if (!portalContent) return;
@@ -309,7 +333,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                 node.removeEventListener('focusin', focus);
                 node.removeEventListener('focusout', blur);
             };
-        }, [portalContent, focusBoundary, open, showTrigger, movableStage]);
+        }, [portalContent, focusBoundary, open, showTrigger, movableStage, setEngaged]);
 
         useLayoutEffect(() => {
             if (!portalContent || !movableStage || !open) return;

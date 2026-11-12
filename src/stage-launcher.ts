@@ -75,13 +75,16 @@ interface StageLauncherProps {
     dockAction?: StageDockAction;
     tab?: {docked: boolean; commands: {open(): void} | null};
     drawerOpen: boolean;
+    savedDrawerSelected?: boolean;
     editorFullscreen?: boolean;
     focusDrawer(): void;
     revealStage(): void;
 }
 
-export function StageLauncher({locale, options, dockAction, tab, drawerOpen, editorFullscreen, focusDrawer, revealStage}: StageLauncherProps) {
-    const [drawerSelected, setDrawerSelected] = React.useState(false);
+export function StageLauncher({locale, options, dockAction, tab, drawerOpen, savedDrawerSelected, editorFullscreen,
+    focusDrawer, revealStage}: StageLauncherProps) {
+    const [localDrawerSelected, setLocalDrawerSelected] = React.useState(false);
+    const drawerSelected = savedDrawerSelected ?? localDrawerSelected;
     const {styles, MenuButton} = options;
     const text = textFor(locale);
     const separate = dockAction?.kind === 'opening' || dockAction?.kind === 'external';
@@ -95,8 +98,8 @@ export function StageLauncher({locale, options, dockAction, tab, drawerOpen, edi
     const defaultTarget = drawerSelected || !available.window ? 'drawer' : 'window';
 
     React.useLayoutEffect(() => {
-        if (mode && !editorFullscreen) setDrawerSelected(mode === 'drawer');
-    }, [mode, editorFullscreen]);
+        if (savedDrawerSelected === undefined && mode && !editorFullscreen) setLocalDrawerSelected(mode === 'drawer');
+    }, [mode, editorFullscreen, savedDrawerSelected]);
 
     function activate(target: StageMode) {
         if (disabled || !available[target]) return;

@@ -14,6 +14,17 @@ export interface WindowPosition {left: number; top: number; width: number; heigh
 /** Panels that were open in one separate window when the layout was saved. */
 export interface SavedPopout {panels: string[]; position?: WindowPosition}
 
+/** Coordinates along the drawer's available travel, with at least one axis at an edge. */
+export interface StageDrawerPosition {x: number; y: number}
+
+export interface StageDrawerLayout {
+    open: boolean;
+    /** Keep the drawer selected after it folds into the edge. */
+    selected: boolean;
+    position?: StageDrawerPosition;
+    width?: number;
+}
+
 export interface WorkspaceLayout {
     version: 1;
     project: string;
@@ -21,6 +32,7 @@ export interface WorkspaceLayout {
     activeGroup: string;
     editingView?: string;
     panels: Record<string, PanelReference>;
+    stageDrawer?: StageDrawerLayout;
     /** Separate windows are restored docked; the user reopens each one. */
     popouts?: SavedPopout[];
 }
@@ -191,9 +203,25 @@ export function readWorkspaceLayout(raw: string, project?: string): WorkspaceLay
     if (editingView !== undefined && (!validId(editingView) || panels[editingView]?.kind !== 'sprite')) return;
     const popouts = readPopouts(input.popouts, panels);
     if (!popouts) return;
+    const stageDrawer = readStageDrawer(input.stageDrawer);
     return {version: 1, project: input.project, grid: {root, width, height, orientation}, activeGroup: input.activeGroup,
         editingView: typeof editingView === 'string' ? editingView : undefined, panels,
+        ...(stageDrawer && {stageDrawer}),
         ...(popouts.length && {popouts})};
+}
+
+function readStageDrawer(input: unknown): StageDrawerLayout | undefined {
+    if (!record(input) || typeof input.open !== 'boolean' || typeof input.selected !== 'boolean') return;
+    const {position, width} = input;
+    const fraction = (value: unknown): value is number => size(value) && value <= 1;
+    const edge = (value: number) => value === 0 || value === 1;
+    return {
+        open: input.open,
+        selected: input.open || input.selected,
+        ...(size(width) && width > 0 && {width}),
+        ...(record(position) && fraction(position.x) && fraction(position.y) &&
+            (edge(position.x) || edge(position.y)) && {position: {x: position.x, y: position.y}})
+    };
 }
 
 function readPopouts(input: unknown, panels: WorkspaceLayout['panels']): SavedPopout[] | undefined {
