@@ -287,6 +287,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const window = document.defaultView;
     const documentWorkspace = multiView && getDocumentWorkspace(vm);
     let pendingRestore = Boolean(persistence);
+    let drawerEditedDuringRestore = false;
     let restoreFrame: number | undefined;
     let restoreTimeout: number | undefined;
     let saveFrame: number | undefined;
@@ -918,8 +919,9 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             .map(popout => ({...popout, panels: popout.panels.filter(id =>
                 reopenable.get(id) === popout && views.has(id) && panels[id]?.kind === 'sprite')}))
             .filter(popout => popout.panels.length);
+        const stageDrawer = stagePane?.drawer?.read();
         return {version: 1, project: projectSignature(targets), ...saved,
-            editingView: active?.id, panels, ...(popouts.length && {popouts})};
+            editingView: active?.id, panels, ...(stageDrawer && {stageDrawer}), ...(popouts.length && {popouts})};
     }
 
     function writeLayout() {
@@ -991,17 +993,21 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         pendingRestore = false;
         window.clearTimeout(restoreTimeout);
         restoreTimeout = undefined;
+        if (drawerEditedDuringRestore) {
+            drawerEditedDuringRestore = false;
+            scheduleSave();
+        }
         updateLayoutState();
     }
 
-    /** The panels and splits of a layout, without sizes or selection, to tell whether the user changed it. */
+    /** The tab arrangement and drawer state used to detect a change from the initial layout. */
     function layoutShape(layout: WorkspaceLayout) {
         type Node = WorkspaceLayout['grid']['root'];
         const reference = (id: string) => layout.panels[id] ?? null;
         const shape = (node: Node): unknown => Array.isArray(node.data) ? node.data.map(shape) :
             node.data.views.map(reference);
         return JSON.stringify([layout.grid.orientation, shape(layout.grid.root),
-            (layout.popouts ?? []).map(popout => popout.panels.map(reference))]);
+            (layout.popouts ?? []).map(popout => popout.panels.map(reference)), layout.stageDrawer]);
     }
 
     function identifyProject(): WorkspaceProjectIdentity {
@@ -1029,7 +1035,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     /** Keep the layout the project opened with, so leaving it unchanged adds no record. */
     function keepInitialLayout() {
         const layout = captureLayout();
-        initialShape = layout && layoutShape(layout);
+        initialShape = layout && layoutShape({...layout, stageDrawer: undefined});
         finishRestore();
     }
 
@@ -1040,7 +1046,13 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         if (!targets.length || !vm.editingTarget) return;
         const signature = projectSignature(targets);
         if (!layoutSession) return openLayoutSession(signature);
-        if (!pendingRestore) return;
+        if (!pendingRestore) {
+            if (drawerEditedDuringRestore) {
+                drawerEditedDuringRestore = false;
+                scheduleSave();
+            }
+            return;
+        }
         reopenable.clear();
         // A project found by its file, folder or desktop key keeps its tabs even after its sprites were renamed.
         const exact = layoutSession.exact;
@@ -1089,6 +1101,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         assignTabNumbers(resolvedSprites.values(), new Set([...targets.map(baseTitle),
             ...Object.values(panels).map(panel => panel.title)]));
         for (const [id, view] of resolvedSprites) panels[id].title = tabTitle(view);
+        const restoreDrawer = !drawerEditedDuringRestore;
         finishRestore();
         syncing = true;
         try {
@@ -1099,6 +1112,11 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             for (const [id, view] of resolvedSprites) views.set(id, view);
             for (const [id, request] of resolvedDocuments) documents.set(id, {request});
             dockview.fromJSON({grid: kept.grid, activeGroup: kept.activeGroup, panels});
+            if (restoreDrawer) {
+                const drawer = stored.stageDrawer;
+                stagePane?.drawer?.restore(drawer && dockview.getPanel(stagePanelId) ?
+                    {...drawer, open: false, selected: false} : drawer);
+            }
             for (const popout of stored.popouts ?? []) {
                 for (const id of popout.panels) if (views.has(id)) reopenable.set(id, popout);
             }
@@ -1131,6 +1149,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             layoutSession = undefined;
             initialShape = undefined;
             pendingRestore = true;
+            drawerEditedDuringRestore = false;
+            stagePane?.drawer?.restore();
             if (saveFrame !== undefined) window.cancelAnimationFrame(saveFrame);
             saveFrame = undefined;
             window.clearTimeout(restoreTimeout);
@@ -1219,6 +1239,10 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     const unsubscribeDocuments = persistence && documentWorkspace && documentWorkspace.subscribe(scheduleRestore);
     projectLoading = Boolean(persistence && persistence.isProjectLoading?.());
     const unsubscribeProject = persistence && persistence.subscribeProject?.(projectChanged);
+    const unsubscribeDrawer = persistence && stagePane?.drawer?.subscribe(() => {
+        if (pendingRestore || !layoutSession) drawerEditedDuringRestore = true;
+        scheduleSave();
+    });
     layoutStore?.readTabsPosition().then(position => {
         if (!disposed && !tabsChosen && position === 'left') setVerticalTabs(true, false);
     }, () => undefined).finally(() => {
@@ -1254,6 +1278,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             if (persistence) window.removeEventListener('pagehide', flushLayout);
             if (unsubscribeDocuments) unsubscribeDocuments();
             if (unsubscribeProject) unsubscribeProject();
+            if (unsubscribeDrawer) unsubscribeDrawer();
             if (disconnectDocuments) disconnectDocuments();
             root.removeEventListener('click', guardDocumentClose, true);
             root.removeEventListener('keydown', guardDocumentClose, true);

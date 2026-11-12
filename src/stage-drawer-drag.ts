@@ -1,16 +1,17 @@
+import type {StageDrawerPosition} from './workspace-layout.ts';
+
 const controls = 'button, input, select, textarea, label, a[href], img, ' +
     '[role="button"], [role="slider"], [role="menu"], [tabindex], [contenteditable]';
 
-type Position = {x: number; y: number};
-
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
-export function attachStageDrawerDrag(drawer: HTMLElement, stage: HTMLElement, editor: HTMLElement, focus: () => void) {
+export function attachStageDrawerDrag(drawer: HTMLElement, stage: HTMLElement, editor: HTMLElement, focus: () => void,
+    onPositionChange: (position: StageDrawerPosition) => void) {
     const document = drawer.ownerDocument;
     const view = document.defaultView;
-    let position: Position | undefined;
+    let position: StageDrawerPosition | undefined;
     let drag: {id: number; x: number; y: number; offsetX: number; offsetY: number; moved: boolean} | undefined;
-    let resizeDrag: {id: number; edge: string; start: DOMRect; position?: Position} | undefined;
+    let resizeDrag: {id: number; edge: string; start: DOMRect; position?: StageDrawerPosition} | undefined;
 
     function bounds() {
         const area = editor.getBoundingClientRect();
@@ -93,10 +94,23 @@ export function attachStageDrawerDrag(drawer: HTMLElement, stage: HTMLElement, e
         if (resizeDrag?.id === event.pointerId) {
             place();
             resizeDrag = undefined;
+            if (position) onPositionChange({...position});
         }
         if (drag?.id !== event.pointerId) return;
+        const moved = drag.moved;
         drag = undefined;
         stage.removeAttribute('data-stage-drawer-dragging');
+        if (moved && position) onPositionChange({...position});
+    }
+
+    function setPosition(next?: StageDrawerPosition) {
+        position = next && {...next};
+        if (!position) {
+            stage.removeAttribute('data-stage-drawer-positioned');
+            stage.style.removeProperty('--plus-stage-drawer-x');
+            stage.style.removeProperty('--plus-stage-drawer-y');
+        }
+        place();
     }
 
     const handlers = {pointerdown: start, pointermove: move, pointerup: finish,
@@ -108,7 +122,7 @@ export function attachStageDrawerDrag(drawer: HTMLElement, stage: HTMLElement, e
     observer.observe(stage);
     view.addEventListener('resize', resize);
     place();
-    return () => {
+    function dispose() {
         for (const [name, handler] of Object.entries(handlers)) drawer.removeEventListener(name, handler);
         if (drag && drawer.hasPointerCapture(drag.id)) drawer.releasePointerCapture(drag.id);
         observer.disconnect();
@@ -119,5 +133,6 @@ export function attachStageDrawerDrag(drawer: HTMLElement, stage: HTMLElement, e
         stage.removeAttribute('data-stage-drawer-edge');
         stage.style.removeProperty('--plus-stage-drawer-x');
         stage.style.removeProperty('--plus-stage-drawer-y');
-    };
+    }
+    return {setPosition, dispose};
 }
