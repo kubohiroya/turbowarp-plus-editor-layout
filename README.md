@@ -68,6 +68,7 @@ const aiAgents = createAiAgents(React, {styles});
 aiAgents.openSettings({locale, returnFocus: trigger});
 ```
 
+- A Desktop host can pass a `DesktopAiAgentsPort` to `createAiAgents(React, {styles, desktop})`. The host owns native app selection, confirmations and persistence. The menu and test launch pass only the saved entry's ID. Saving web settings preserves entries with unknown target kinds.
 - The menu lists the turned-on services, each with an icon and its name, then a separator and "AI エージェント設定…" / "AI agent settings…". Without turned-on services it shows only that item and a short hint. Arrow keys, Home and End move between the items. Choosing a service opens its address with `window.open(url, '_blank', 'noopener,noreferrer')`.
 - The presets are ChatGPT (`https://chatgpt.com/`) and Claude (`https://claude.ai/new`). Each can be turned off, and its address replaced by a deep link such as a previous conversation; an empty address means the default. The user can add and remove services of their own (name and address). Only `https:` addresses are accepted; anything else shows an error under the field. The icons are generic: a chat bubble with an initial for a preset, a globe for the user's own service. No service logos are used.
 - The dialog (`role="dialog"`, `aria-modal`) is plain DOM, so it can be opened without React (`openAgentSettingsDialog`). It focuses its first field, keeps Tab inside, closes on Escape or Cancel without saving, and returns focus to `returnFocus` or to the element focused before.

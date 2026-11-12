@@ -1,11 +1,11 @@
 import {isJapanese} from './drawer-views.ts';
+import {desktopAgentSettings, type DesktopAiAgentsPort} from './desktop-ai-agents.ts';
 
 /** The services the Editor knows by name. Their name and icon are fixed; their address can be replaced. */
 export type AgentPresetId = 'chatgpt' | 'claude';
 
 /**
- * Where a service is opened. Only web pages for now; a desktop app launched with arguments is planned
- * as another `kind`, which this version ignores when it reads the settings.
+ * A web service. Desktop applications are stored separately by the Desktop host.
  */
 export interface AgentUrlTarget {
     kind: 'url';
@@ -26,6 +26,7 @@ export interface AgentSettings {
     version: 1;
     /** The presets in their fixed order, then the user's own services. */
     services: AgentService[];
+    unknownServices?: unknown[];
 }
 
 export type AgentStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -65,7 +66,7 @@ const presetService = (preset: (typeof agentPresets)[number], saved?: {enabled?:
 
 export const defaultAgentSettings = (): AgentSettings => ({version: 1, services: agentPresets.map(preset => presetService(preset))});
 
-/** Settings read from saved JSON. Anything missing, unknown or invalid falls back to the defaults, entry by entry. */
+/** Reads usable web services and preserves settings for target kinds this version cannot open. */
 export function parseAgentSettings(raw: string | null | undefined): AgentSettings {
     let saved: unknown;
     try {
@@ -77,9 +78,11 @@ export function parseAgentSettings(raw: string | null | undefined): AgentSetting
         !Array.isArray((saved as {services?: unknown}).services)) return defaultAgentSettings();
     const entries = (saved as {services: unknown[]}).services.filter(entry => entry && typeof entry === 'object') as
         {id?: unknown; preset?: unknown; name?: unknown; enabled?: unknown; target?: {kind?: unknown; url?: unknown}}[];
-    const presets = agentPresets.map(preset => presetService(preset, entries.find(entry => entry.preset === preset.id)));
+    const presets = agentPresets.map(preset => presetService(preset, entries.find(entry => entry.preset === preset.id &&
+        (entry.target?.kind === 'url' || entry.target?.kind === undefined))));
     const ids = new Set<string>(presets.map(service => service.id));
     const custom: AgentService[] = [];
+    const unknownServices = entries.filter(entry => typeof entry.target?.kind === 'string' && entry.target.kind !== 'url');
     for (const entry of entries) {
         if (entry.preset !== undefined || entry.target?.kind !== 'url') continue;
         const name = typeof entry.name === 'string' ? entry.name.trim() : '';
@@ -90,7 +93,7 @@ export function parseAgentSettings(raw: string | null | undefined): AgentSetting
         ids.add(id);
         custom.push({id, name, enabled: entry.enabled !== false, target: {kind: 'url', url: checked.url}});
     }
-    return {version: 1, services: [...presets, ...custom]};
+    return {version: 1, services: [...presets, ...custom], ...(unknownServices.length ? {unknownServices} : {})};
 }
 
 export const browserStorage = (): AgentStorage | null => {
@@ -114,9 +117,9 @@ export function writeAgentSettings(settings: AgentSettings, storage: AgentStorag
     key = agentSettingsKey): boolean {
     if (!storage) return false;
     try {
-        storage.setItem(key, JSON.stringify({version: 1, services: settings.services.map(service => service.preset ?
+        storage.setItem(key, JSON.stringify({version: 1, services: [...settings.services.map(service => service.preset ?
             {preset: service.preset, enabled: service.enabled, target: service.target} :
-            {id: service.id, name: service.name, enabled: service.enabled, target: service.target})}));
+            {id: service.id, name: service.name, enabled: service.enabled, target: service.target}), ...(settings.unknownServices ?? [])]}));
         return true;
     } catch {
         return false;
@@ -172,6 +175,7 @@ export interface AgentSettingsDialogOptions {
     /** Where focus goes when the dialog closes. Defaults to the element focused when it opened. */
     returnFocus?: HTMLElement | null;
     onSave?(settings: AgentSettings): void;
+    desktop?: DesktopAiAgentsPort | null;
 }
 
 export interface AgentSettingsDialog {
@@ -189,7 +193,7 @@ interface Row {
 
 let openDialog: AgentSettingsDialog | null = null;
 let nextDialog = 0;
-const focusable = 'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+const focusable = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 const urlProblems = {empty: 'urlEmpty', invalid: 'urlInvalid', 'not-https': 'urlNotHttps'} as const;
 
 /**
@@ -197,7 +201,7 @@ const urlProblems = {empty: 'urlEmpty', invalid: 'urlInvalid', 'not-https': 'url
  * user's own services. It is plain DOM so that any part of the Editor can open it, with or without React.
  */
 export function openAgentSettingsDialog({document: doc = globalThis.document, locale, styles = {}, storage = browserStorage(),
-    storageKey = agentSettingsKey, returnFocus, onSave}: AgentSettingsDialogOptions): AgentSettingsDialog {
+    storageKey = agentSettingsKey, returnFocus, onSave, desktop}: AgentSettingsDialogOptions): AgentSettingsDialog {
     if (openDialog?.element.isConnected) {
         (openDialog.element.querySelector(focusable) as HTMLElement)?.focus();
         return openDialog;
@@ -301,7 +305,8 @@ export function openAgentSettingsDialog({document: doc = globalThis.document, lo
     const cancel = make('button', {type: 'button', class: styles.aiAgentDialogButton}, text('cancel'));
     const save = make('button', {type: 'submit', class: `${styles.aiAgentDialogButton ?? ''} ${styles.aiAgentDialogPrimary ?? ''}`.trim()},
         text('save'));
-    const form = make('form', {novalidate: '', class: styles.aiAgentDialogForm}, presetGroup, customGroup, status,
+    const form = make('form', {novalidate: '', class: styles.aiAgentDialogForm}, presetGroup, customGroup,
+        desktop && desktopAgentSettings(doc, desktop, locale, styles), status,
         make('div', {class: styles.aiAgentDialogActions}, cancel, save));
     const element = make('div', {
         role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': `${prefix}-title`,
@@ -327,7 +332,7 @@ export function openAgentSettingsDialog({document: doc = globalThis.document, lo
             return;
         }
         if (event.key !== 'Tab') return;
-        const items = [...element.querySelectorAll<HTMLElement>(focusable)];
+        const items = [...element.querySelectorAll<HTMLElement>(focusable)].filter(item => !item.matches(':disabled'));
         const first = items[0];
         const last = items[items.length - 1];
         if (event.shiftKey && doc.activeElement === first) {
@@ -363,7 +368,7 @@ export function openAgentSettingsDialog({document: doc = globalThis.document, lo
         }
         let count = 0;
         for (const service of services) if (!service.preset) service.id = `custom-${++count}`;
-        const saved: AgentSettings = {version: 1, services};
+        const saved: AgentSettings = {...settings, services};
         if (!writeAgentSettings(saved, storage, storageKey)) {
             status.textContent = text('saveFailed');
             status.hidden = false;

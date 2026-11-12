@@ -66,6 +66,7 @@ const aiAgents = createAiAgents(React, {styles});
 aiAgents.openSettings({locale, returnFocus: trigger});
 ```
 
+- Desktop のホストは `createAiAgents(React, {styles, desktop})` に `DesktopAiAgentsPort` を渡す。OS のアプリ選択、確認、設定の保存はホストが担当する。メニューと「試しに起動」は保存済み項目の ID を渡す。Web の設定を保存する際は、読み取った未知の起動種別の項目も保持する。
 - メニューは、メニューに出すことにしたサービスを、アイコンと名前で並べ、区切りのあとに「AI エージェント設定…」を置く。出すサービスがないときは、その項目と短い案内だけを出す。矢印キー、Home、End で項目を移る。サービスを選ぶと、`window.open(url, '_blank', 'noopener,noreferrer')` で開く。
 - 用意されたサービスは ChatGPT（`https://chatgpt.com/`）と Claude（`https://claude.ai/new`）。それぞれメニューから外せ、以前の会話などの URL に置き換えられる。URL を空にすると既定に戻る。利用者は、名前と URL で自分のサービスを足し、消せる。URL は `https:` で始まるものだけを受け付け、ほかは欄の下に誤りを出す。アイコンは汎用のもので、用意されたサービスは頭文字入りの吹き出し、自分のサービスは地球儀にする。各サービスのロゴは使わない。
 - ダイアログ（`role="dialog"`、`aria-modal`）は React を使わない DOM で、`openAgentSettingsDialog` で開ける。開くと最初の欄に移り、Tab はダイアログの中を回る。Escape かキャンセルで保存せずに閉じ、`returnFocus`、なければ開く前の要素に戻る。

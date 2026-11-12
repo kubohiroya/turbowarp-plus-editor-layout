@@ -940,7 +940,8 @@ details.layout-menu button {
     gap: 0.125rem;
 }
 
-.ai-agent-dialog-field input {
+.ai-agent-dialog-field input,
+.ai-agent-dialog-field textarea {
     box-sizing: border-box;
     inline-size: 100%;
     padding: 0.375rem 0.5rem;
