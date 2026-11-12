@@ -1,4 +1,5 @@
 import React, {createElement as element, type ComponentType} from 'react';
+import {drawerPinIcon} from './drawer-views.ts';
 
 const labels = {
     ja: {
@@ -6,14 +7,18 @@ const labels = {
         menu: 'ステージの開き方',
         window: '別ウィンドウで表示',
         tab: 'タブで表示',
-        drawer: '引出しで表示'
+        drawer: '引出しで表示',
+        pinDrawer: '引出しを常時表示する',
+        autoHideDrawer: '引出しを自動的に隠す'
     },
     en: {
         open: 'Open stage',
         menu: 'Stage opening options',
         window: 'Show in a separate window',
         tab: 'Show in a tab',
-        drawer: 'Show in the drawer'
+        drawer: 'Show in the drawer',
+        pinDrawer: 'Keep the drawer open',
+        autoHideDrawer: 'Automatically hide the drawer'
     }
 };
 
@@ -34,6 +39,16 @@ export function stagePresentationItems(locale: string, current: StageMode | null
         icon: element('svg', {viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4,
             strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true}, element('path', {d: icons[id]}))
     }));
+}
+
+export function stageDrawerPinItem(locale: string, pinned: boolean, setPinned: (pinned: boolean) => void) {
+    const text = textFor(locale);
+    return {
+        id: 'drawer-pin',
+        label: pinned ? text.autoHideDrawer : text.pinDrawer,
+        icon: drawerPinIcon(element, !pinned),
+        onSelect: () => setPinned(!pinned)
+    };
 }
 
 export function useStageDocumentFullscreen(doc?: Document) {

@@ -1,7 +1,7 @@
 import {createLayout, createSplitter, splitAxis} from './index.ts';
 import {createTargetList} from './targets.ts';
 import type {DrawerViews} from './drawer-views.ts';
-import {availableDrawerViews, createDrawerViewBar, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
+import {availableDrawerViews, createDrawerViewBar, drawerPinIcon, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
 import {attachStageDrawerDrag} from './stage-drawer-drag.ts';
 import type {StageDrawerLayout, StageDrawerPosition} from './workspace-layout.ts';
 
@@ -34,6 +34,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const [targetsPinned, setTargetsPinned] = useState(true);
         const [showStage, setShowStage] = useState(true);
         const [stageDrawerOpen, setStageDrawerOpen] = useState(false);
+        const [localStageDrawerPinned, setLocalStageDrawerPinned] = useState(true);
         const [size, setSize] = useState(null);
         const [targetRatio, setTargetRatio] = useState(null);
         const [viewRatio, setViewRatio] = useState(null);
@@ -50,6 +51,11 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const body = useRef(null);
         const plusLayout = enabled && !props.fullscreen;
         const stageHidden = plusLayout && !showStage;
+        const stageDrawerPinned = updateStageDrawer ? stageDrawerLayout?.pinned !== false : localStageDrawerPinned;
+        const setStageDrawerPinned = (pinned: boolean) => {
+            if (updateStageDrawer) updateStageDrawer({pinned});
+            else setLocalStageDrawerPinned(pinned);
+        };
         const japanese = isJapanese(props.locale);
         const undockLabel = japanese ? 'アンドックボタンを表示' : 'Show undock buttons';
         const layoutMenuLabel = japanese ? '配置メニュー' : 'Layout options';
@@ -188,7 +194,8 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         });
         return element(context.Provider, {value: {
             showUndock, plusLayout, targetsPinned, setTargetsPinned, stageHidden, setStageVisible: setShowStage, stageResize, stageActionMount,
-            stageDrawer: plusLayout && stageDrawer, setStageDrawerOpen, locale: props.locale,
+            stageDrawer: plusLayout && stageDrawer, stageDrawerPinned, setStageDrawerPinned, setStageDrawerOpen,
+            locale: props.locale,
             drawerViews, drawerView, selectDrawerView
         }},
             Container ? element(Container, {locale: props.locale}, layout) : layout);
@@ -196,7 +203,8 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
 
     function EdgeDrawer({edge, label, pinned = false, onOpenChange, portalContent = false, holdOpenSelector = '',
         focusPanelRef = undefined, closePanelRef = undefined, focusBoundary = undefined, showTrigger = true,
-        movableStage = false, available = true, stageDrawerLayout = undefined as StageDrawerLayout | undefined,
+        movableStage = false, available = true, keepOpenOnBlur = false,
+        stageDrawerLayout = undefined as StageDrawerLayout | undefined,
         updateStageDrawer = undefined as ((patch: Partial<StageDrawerLayout>) => void) | undefined, children}) {
         const [hovered, setHovered] = useState(false);
         const [localEngaged, setLocalEngaged] = useState(false);
@@ -272,6 +280,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (panel.current.contains(event.target as Node)) setEngaged(true);
         };
         const blur = (event: FocusEvent) => {
+            if (keepOpenOnBlur) return;
             const target = event.relatedTarget as Node;
             const source = event.target as HTMLButtonElement;
             // Opening the stage disables the launcher before focus moves into the drawer.
@@ -317,7 +326,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             if (!focusBoundary) return;
             focusBoundary.addEventListener('focusout', blur);
             return () => focusBoundary.removeEventListener('focusout', blur);
-        }, [focusBoundary, setEngaged]);
+        }, [focusBoundary, keepOpenOnBlur, setEngaged]);
 
         useLayoutEffect(() => {
             if (!portalContent) return;
@@ -333,7 +342,21 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                 node.removeEventListener('focusin', focus);
                 node.removeEventListener('focusout', blur);
             };
-        }, [portalContent, focusBoundary, open, showTrigger, movableStage, setEngaged]);
+        }, [portalContent, focusBoundary, open, showTrigger, movableStage, keepOpenOnBlur, setEngaged]);
+
+        useLayoutEffect(() => {
+            if (!movableStage || keepOpenOnBlur || !open) return;
+            const node = drawer.current as HTMLElement;
+            const dismiss = (event: PointerEvent) => {
+                const target = event.target as Node;
+                if (node.contains(target) || focusBoundary?.contains(target)) return;
+                setHovered(false);
+                setEngaged(false);
+            };
+            // The restored drawer may be open without having received focus.
+            node.ownerDocument.addEventListener('pointerdown', dismiss, true);
+            return () => node.ownerDocument.removeEventListener('pointerdown', dismiss, true);
+        }, [movableStage, keepOpenOnBlur, open, focusBoundary, setEngaged]);
 
         useLayoutEffect(() => {
             if (!portalContent || !movableStage || !open) return;
@@ -443,10 +466,7 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const {targetsPinned, setTargetsPinned} = useContext(context);
         return element('button', {type: 'button', className: styles.drawerPin, 'aria-label': label, 'aria-pressed': targetsPinned,
             title: label, onClick: () => setTargetsPinned(value => !value)},
-        element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
-            fill: targetsPinned ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round'},
-        element('path', {d: 'M9 2 14 7 12 8l-2 3-5-5 3-2 1-2Z'}), element('path', {d: 'm7.5 8.5-4 4'}),
-        !targetsPinned && element('path', {d: 'M2 2l12 12', strokeLinecap: 'round'})));
+        drawerPinIcon(element, targetsPinned));
     }
 
     function useSpriteListTools() {

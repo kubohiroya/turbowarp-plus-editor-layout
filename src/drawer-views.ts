@@ -59,6 +59,13 @@ export const agentsIconPath = 'M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 
 export const isJapanese =(locale: string) => /^ja(?:-|$)/i.test(locale ?? '');
 export const drawerLabel = (id: keyof typeof names, locale: string) => names[id][isJapanese(locale) ? 0 : 1];
 
+export function drawerPinIcon(element: typeof import('react').createElement, pinned: boolean) {
+    return element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
+        fill: pinned ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinejoin: 'round'},
+    element('path', {d: 'M9 2 14 7 12 8l-2 3-5-5 3-2 1-2Z'}), element('path', {d: 'm7.5 8.5-4 4'}),
+    !pinned && element('path', {d: 'M2 2l12 12', strokeLinecap: 'round'}));
+}
+
 /** The supported host views in button order, without unknown or repeated ids. */
 export function availableDrawerViews(drawerViews: DrawerViews | undefined): DrawerView[] {
     const views = drawerViews?.views ?? [];

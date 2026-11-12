@@ -5,7 +5,7 @@ import {createDockview, themeLight} from 'dockview';
 import {StageLauncher, type StageDockAction, type StageLauncherOptions} from './stage-launcher.ts';
 
 export type {StageDockAction, StageLauncherOptions} from './stage-launcher.ts';
-export {stagePresentationItems, useStageDocumentFullscreen} from './stage-launcher.ts';
+export {stageDrawerPinItem, stagePresentationItems, useStageDocumentFullscreen} from './stage-launcher.ts';
 export {StageResizeHandle} from './stage-resize-handle.ts';
 
 interface StageWindowConnection<Target> {
@@ -112,6 +112,7 @@ export function createStageSurface(React: typeof import('react'), {
     context: Context<{
         locale: string;
         stageDrawer?: boolean;
+        stageDrawerPinned?: boolean;
         stageHidden?: boolean;
         setStageDrawerOpen?(open: boolean): void;
         setStageVisible?(visible: boolean): void;
@@ -129,7 +130,8 @@ export function createStageSurface(React: typeof import('react'), {
         editorFullscreen?: boolean;
         [key: string]: any;
     }) {
-        const {locale, stageDrawer, stageHidden, setStageDrawerOpen, setStageVisible} = React.useContext(context);
+        const {locale, stageDrawer, stageDrawerPinned = true, stageHidden, setStageDrawerOpen, setStageVisible} =
+            React.useContext(context);
         const [drawerOpen, setDrawerOpen] = React.useState(false);
         const localDrawerRef = React.useRef<() => void>(null);
         const focusDrawer = openDrawerRef ?? localDrawerRef;
@@ -163,6 +165,7 @@ export function createStageSurface(React: typeof import('react'), {
         const dock = stageDrawer ? React.createElement(EdgeDrawer, {
             edge: 'right',
             movableStage: true,
+            keepOpenOnBlur: stageDrawerPinned,
             available: !placement?.docked && (!dockAction || dockAction.kind === 'docked'),
             stageDrawerLayout: drawerLayout,
             updateStageDrawer: updateDrawer,

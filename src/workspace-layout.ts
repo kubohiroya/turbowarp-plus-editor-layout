@@ -21,6 +21,8 @@ export interface StageDrawerLayout {
     open: boolean;
     /** Keep the drawer selected after it folds into the edge. */
     selected: boolean;
+    /** Missing in older records, which use the default pinned behavior. */
+    pinned?: boolean;
     position?: StageDrawerPosition;
     width?: number;
 }
@@ -212,12 +214,13 @@ export function readWorkspaceLayout(raw: string, project?: string): WorkspaceLay
 
 function readStageDrawer(input: unknown): StageDrawerLayout | undefined {
     if (!record(input) || typeof input.open !== 'boolean' || typeof input.selected !== 'boolean') return;
-    const {position, width} = input;
+    const {position, width, pinned} = input;
     const fraction = (value: unknown): value is number => size(value) && value <= 1;
     const edge = (value: number) => value === 0 || value === 1;
     return {
         open: input.open,
         selected: input.open || input.selected,
+        ...(typeof pinned === 'boolean' && {pinned}),
         ...(size(width) && width > 0 && {width}),
         ...(record(position) && fraction(position.x) && fraction(position.y) &&
             (edge(position.x) || edge(position.y)) && {position: {x: position.x, y: position.y}})
