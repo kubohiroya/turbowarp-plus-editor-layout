@@ -21,7 +21,7 @@ import type {SpriteVariableEdit, SpriteVariableEditError} from '@kubohiroya/turb
 import {SpriteMessagePane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
 import type {MessageRenameError} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-message-pane';
 import type {MessageUse, ProjectMessage, TargetMessages} from '@kubohiroya/turbowarp-plus-editor-project-model/project-messages';
-import {createRenameMenuItem, spriteRenameLabel} from './target-tab-menu.ts';
+import {createTargetTabMenuItem, spriteRenameLabel} from './target-tab-menu.ts';
 
 export {getDocumentWorkspace} from './document-workspace.ts';
 export {createWorkspaceLayoutStore, workspaceLayoutDatabase, workspaceLayoutLimit} from './workspace-layout-store.ts';
@@ -325,20 +325,24 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             const view = views.get(panel.id);
             if (!view) return [];
             const items = [];
-            if (multiView) items.push({
-                label: japanese ? '新しいタブで開く' : 'Open in new tab',
-                action: () => openInNewTab(view.id)
-            });
+            if (multiView) items.push({component: 'open-in-new-tab'});
             if (!view.target.isStage && vm.renameSprite) items.push({
                 component: 'rename-sprite'
             });
             return items;
         },
-        createContextMenuItemComponent: ({component}) => component === 'rename-sprite' ?
-            createRenameMenuItem(document, text.title, id => {
-                const target = views.get(id)?.target;
-                if (target) openRenameDialog(target);
-            }) : undefined,
+        createContextMenuItemComponent: ({component}) => {
+            if (component === 'open-in-new-tab') {
+                const label = japanese ? '新しいタブで開く' : 'Open in new tab';
+                return createTargetTabMenuItem(document, label, 'new-tab', openInNewTab);
+            }
+            if (component === 'rename-sprite') {
+                return createTargetTabMenuItem(document, text.title, 'rename', id => {
+                    const target = views.get(id)?.target;
+                    if (target) openRenameDialog(target);
+                });
+            }
+        },
         createComponent: ({name, id: componentId}) => {
             const element = document.createElement('div');
             if (name === documentComponent) {

@@ -17,6 +17,10 @@ interface MenuPrimitives {
 
 const pencil = 'm4 16-1 5 5-1L21 7l-4-4L4 16Zm10-10 4 4';
 const open = 'M13 4h7v7m0-7-9 9m-1-8H4v15h15v-6';
+const tabMenuIcons = {
+    rename: pencil,
+    'new-tab': 'M3 4h18v16H3zM3 10h18M11 4l3 6m-4 5h4m-2-2v4'
+};
 const iconClass = 'tw-plus-target-menu-icon';
 const svgNamespace = 'http://www.w3.org/2000/svg';
 const isJapanese = (locale: string) => /^ja(?:-|$)/i.test(locale);
@@ -24,7 +28,8 @@ export const spriteRenameLabel = (locale: string) => isJapanese(locale) ? 'ã‚¹ãƒ
 
 export const SpriteTargetTabsContext = React.createContext<TargetTabs | null>(null);
 
-export function createRenameMenuItem(document: Document, title: string, rename: (id: string) => void): IContextMenuItemRenderer {
+export function createTargetTabMenuItem(document: Document, title: string, iconName: keyof typeof tabMenuIcons,
+    action: (id: string) => void): IContextMenuItemRenderer {
     const element = document.createElement('button');
     element.type = 'button';
     element.className = 'dv-context-menu-item tw-plus-target-menu-button';
@@ -34,7 +39,7 @@ export function createRenameMenuItem(document: Document, title: string, rename: 
     icon.setAttribute('viewBox', '0 0 24 24');
     icon.setAttribute('aria-hidden', 'true');
     const path = document.createElementNS(svgNamespace, 'path');
-    path.setAttribute('d', pencil);
+    path.setAttribute('d', tabMenuIcons[iconName]);
     icon.append(path);
     element.append(icon, title);
     return {
@@ -43,7 +48,7 @@ export function createRenameMenuItem(document: Document, title: string, rename: 
             if (!('panel' in props)) return;
             element.onclick = () => {
                 props.close();
-                rename(props.panel.id);
+                action(props.panel.id);
             };
         },
         dispose() {
