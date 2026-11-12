@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {JSDOM} from 'jsdom';
+import type {DesktopAiAgentsPort} from '../src/ai-agents.ts';
 import {
     agentSettingsKey, checkAgentUrl, defaultAgentSettings, enabledAgentServices, openAgentService,
     parseAgentSettings, readAgentSettings, writeAgentSettings
@@ -75,7 +76,7 @@ test('a service opens in a new tab without access to the Editor', () => {
     assert.deepEqual(calls, [['https://claude.ai/new', '_blank', 'noopener,noreferrer']]);
 });
 
-async function mountMenu(t, {locale = 'ja', storage = memoryStorage()} = {}) {
+async function mountMenu(t, {locale = 'ja', storage = memoryStorage(), desktop = undefined as DesktopAiAgentsPort | undefined} = {}) {
     const dom = new JSDOM('<main><button id="trigger">AI</button><div id="menu"></div></main>', {pretendToBeVisual: true});
     const globals = {window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true};
     Object.assign(globalThis, globals);
@@ -86,7 +87,7 @@ async function mountMenu(t, {locale = 'ja', storage = memoryStorage()} = {}) {
     const document = dom.window.document;
     const opened: string[] = [];
     let closed = 0;
-    const agents = createAiAgents(React, {storage, open: url => opened.push(url)});
+    const agents = createAiAgents(React, {storage, desktop, open: url => opened.push(url)});
     const root = createRoot(document.getElementById('menu')!);
     t.after(() => {
         act(() => root.unmount());
@@ -247,4 +248,94 @@ test('an emptied preset address goes back to the default, and a refused save kee
     assert.match(alert.textContent!, /could not be saved/);
     [...opened.element.querySelectorAll('button')].find(item => item.textContent === 'Cancel')!.click();
     assert.equal(document.querySelector('[role="dialog"]'), null);
+});
+
+test('saving web settings preserves unknown target kinds without listing them', async t => {
+    const opaque = {id: 'future', name: 'Future target', target: {kind: 'future', extra: [1, 2]}};
+    const storage = memoryStorage({[agentSettingsKey]: saved([opaque])});
+    const {show, items, document, act} = await mountMenu(t, {storage, locale: 'en'});
+    show();
+    assert.deepEqual(items().map(item => item.textContent), ['ChatGPT', 'Claude', 'AI agent settings…']);
+    act(() => items().at(-1)!.click());
+    const dialog = document.querySelector('[role="dialog"]')!;
+    act(() => dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    assert.deepEqual(JSON.parse(storage.values.get(agentSettingsKey)!).services.at(-1), opaque);
+});
+
+test('the Desktop menu passes only the application ID and shows launch errors', async t => {
+    const calls: unknown[][] = [];
+    const desktop = {
+        list: async () => ({ok: true, value: {revision: 'saved', entries: [
+            {id: 'app', name: 'Desktop app', application: '/app', args: [], cwd: '', url: 'https://example.com/agent'}
+        ]}}),
+        launch: async (...args) => {
+            calls.push(args);
+            return {ok: false, code: 'app-missing'};
+        }
+    } as DesktopAiAgentsPort;
+    const {show, items, act, document, closed, opened} = await mountMenu(t, {desktop, locale: 'en'});
+    await act(async () => { show(); });
+    const app = items().find(item => item.textContent === 'Desktop app')!;
+    assert.equal(app.title, 'Launches a desktop application');
+    await act(async () => { app.click(); });
+    assert.deepEqual(calls, [['app']]);
+    assert.equal(closed(), 0);
+    assert.equal(document.querySelector('[role="alert"]')!.textContent, 'The selected application is missing or cannot run.');
+    act(() => items().find(item => item.textContent === 'Open the website')!.click());
+    assert.deepEqual(opened, ['https://example.com/agent']);
+    assert.equal(closed(), 1);
+});
+
+test('Desktop settings select applications, preview arguments, reorder and launch a saved entry', async t => {
+    const ok = <T,>(value: T) => ({ok: true as const, value});
+    const launched: string[] = [];
+    let revision = 'old';
+    let entries = [{id: 'existing', name: 'Existing app', application: '/old-app', args: [], cwd: ''}];
+    const context = {projectFolder: '/work/Project with spaces', repository: '/work', branch: 'main'};
+    const desktop: DesktopAiAgentsPort = {
+        list: async () => ok({revision, entries}),
+        context: async () => ok(context),
+        chooseContext: async () => ok(context),
+        chooseApp: async () => ok({selection: 'opaque-token', application: '/new-app'}),
+        save: async (previous, drafts) => {
+            assert.equal(previous, revision);
+            assert.equal(drafts[0].selection, 'opaque-token');
+            assert.equal('application' in drafts[0], false);
+            entries = drafts.map(({selection, ...draft}) => ({...draft, application: selection ? '/new-app' : '/old-app'}));
+            revision = 'new';
+            return ok({revision, entries});
+        },
+        launch: async id => {
+            launched.push(id);
+            return ok(null);
+        }
+    };
+    const {items, show, act, document, dom} = await mountMenu(t, {desktop, locale: 'en'});
+    await act(async () => { show(); });
+    await act(async () => { items().at(-1)!.click(); });
+    const section = [...document.querySelectorAll('fieldset')].find(item => item.querySelector('legend')?.textContent === 'Desktop applications')!;
+    const button = (name: string, parent: Element = section) =>
+        [...parent.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent === name)!;
+    button('Add an application').click();
+    const newRow = section.querySelectorAll('[role="group"]')[1];
+    const name = newRow.querySelector('input')!;
+    name.value = 'New app';
+    name.dispatchEvent(new dom.window.Event('input'));
+    button('Choose…', newRow).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    const args = newRow.querySelector('textarea')!;
+    args.value = '{projectFolder}\n{branch}';
+    args.dispatchEvent(new dom.window.Event('input'));
+    assert.match(newRow.textContent!, /\["\/work\/Project with spaces","main"\]/u);
+    button('Move up', newRow).click();
+    button('Save applications').click();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.deepEqual(entries.map(item => item.name), ['New app', 'Existing app']);
+    const first = section.querySelector('[role="group"]')!;
+    button('Try launching', first).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.deepEqual(launched, [entries[0].id]);
 });
