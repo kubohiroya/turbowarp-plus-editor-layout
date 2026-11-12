@@ -37,8 +37,9 @@ export function useDockviewStage(enabled: boolean, locale: string) {
         const previous = savedDrawer.current;
         const next = {open: false, selected: false, ...previous, ...patch};
         if (next.open === Boolean(previous?.open) && next.selected === Boolean(previous?.selected) &&
-            next.position === previous?.position && next.width === previous?.width) return;
-        restoreDrawer(next.open || next.selected || next.position || next.width ? next : undefined);
+            next.pinned === previous?.pinned && next.position === previous?.position && next.width === previous?.width) return;
+        restoreDrawer(next.open || next.selected || next.pinned !== undefined || next.position || next.width ?
+            next : undefined);
         for (const listener of drawerListeners) listener();
     }, [drawerListeners, restoreDrawer]);
     const resetDrawerPresentation = React.useCallback(() => updateDrawer({open: false, selected: false}),
