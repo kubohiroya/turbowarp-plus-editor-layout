@@ -1,7 +1,7 @@
 import {createLayout, createSplitter, splitAxis} from './index.ts';
 import {createTargetList} from './targets.ts';
-import type {DrawerViews} from './drawer-views.ts';
-import {availableDrawerViews, createDrawerViewBar, drawerPinIcon, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
+import type {DrawerView, DrawerViews} from './drawer-views.ts';
+import {availableDrawerViews, createDrawerViewBar, drawerLabel, drawerPinIcon, hasDrawerBar, readDrawerView, writeDrawerView} from './drawer-views.ts';
 import {attachStageDrawerDrag} from './stage-drawer-drag.ts';
 import type {StageDrawerLayout, StageDrawerPosition} from './workspace-layout.ts';
 
@@ -15,7 +15,16 @@ const drawerViewWidth = 300;
 const minimumDrawerViewWidth = 160;
 const minimumStandardEditor = 380;
 
-export function createStandardLayout(React, {styles, targetStyles, context, LayoutMenu}) {
+type DrawerPanel = (props: {
+    id: DrawerView['id'];
+    title: string;
+    locale: string;
+    dockRequest: number;
+    renderHeading(undock: import('react').ReactNode): import('react').ReactNode;
+    renderContent(detached: boolean): import('react').ReactNode;
+}) => import('react').ReactNode;
+
+export function createStandardLayout(React, {styles, targetStyles, context, LayoutMenu, DrawerPanel = undefined as DrawerPanel | undefined}) {
     const {createElement: element, useContext, useLayoutEffect, useRef, useState} = React;
     const SplitLayout = createLayout(React);
     const Splitter = createSplitter(React);
@@ -44,12 +53,17 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         const hostDrawerViews = availableDrawerViews(drawerViews);
         // A view saved earlier comes back once the host supplies it again.
         const drawerView = hostDrawerViews.some(view => view.id === preferredDrawerView) ? preferredDrawerView : 'sprites';
-        const selectDrawerView = view => {
+        const selectDrawerView = React.useCallback(view => {
             setPreferredDrawerView(view);
             writeDrawerView(props.storage, props.storageKey, view);
-        };
+        }, [props.storage, props.storageKey]);
         const body = useRef(null);
         const plusLayout = enabled && !props.fullscreen;
+        const reportDrawerSelection = drawerViews?.onSelectionChange;
+        useLayoutEffect(() => {
+            reportDrawerSelection?.(plusLayout ? drawerView : 'sprites');
+            return () => reportDrawerSelection?.('sprites');
+        }, [reportDrawerSelection, plusLayout, drawerView]);
         const stageHidden = plusLayout && !showStage;
         const stageDrawerPinned = updateStageDrawer ? stageDrawerLayout?.pinned !== false : localStageDrawerPinned;
         const setStageDrawerPinned = (pinned: boolean) => {
@@ -398,11 +412,21 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
     function TargetLayout({compact, render}) {
         const {plusLayout, targetsPinned, locale, drawerViews, drawerView = 'sprites', selectDrawerView} = useContext(context);
         const tools = useState(null);
+        const focusDrawer = useRef(null);
+        const [reveal, setReveal] = useState(null as {id: DrawerView['id']; request: number} | null);
+        useLayoutEffect(() => {
+            if (!plusLayout) return;
+            return drawerViews?.registerReveal?.(id => {
+                selectDrawerView(id);
+                setReveal(previous => ({id, request: (previous?.request ?? 0) + 1}));
+                focusDrawer.current?.();
+            });
+        }, [plusLayout, drawerViews, selectDrawerView]);
         const panel = render(plusLayout || compact);
         if (!plusLayout) return panel;
         const content = element(targetTools.Provider, {value: tools}, panel);
         const drawer = children => element(EdgeDrawer, {
-            edge: 'left', pinned: targetsPinned,
+            edge: 'left', pinned: targetsPinned, focusPanelRef: focusDrawer,
             label: isJapanese(locale) ? 'スプライト一覧を展開' : 'Reveal sprite list'
         }, children);
         // Without host views the drawer keeps the sprite list as its only, unwrapped content.
@@ -412,14 +436,10 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         return drawer(element(React.Fragment, null,
             element(DrawerViewBar, {locale, views, agents: drawerViews.agents, selected: active ? active.id : 'sprites',
                 onSelect: selectDrawerView}),
-            // Pinning belongs to the drawer, so every view keeps the pin button the sprite list shows.
-            active && element('div', {className: styles.drawerViewTools},
-                active.tools?.({locale}),
-                element(DrawerPinButton, {label: isJapanese(locale) ? 'このパネルを固定表示' : 'Pin this panel'})),
             // The GUI's target pane stays mounted, so its file inputs and library keep working while hidden.
             element('div', {className: styles.drawerSprites, hidden: Boolean(active)}, content),
-            active && element('div', {className: styles.drawerViewContent, 'data-drawer-content': active.id},
-                active.render({locale}))));
+            views.map(view => element(HostDrawerView, {key: view.id, view, locale, active: view === active,
+                dockRequest: reveal?.id === view.id ? reveal.request : 0}))));
     }
 
     function SpriteGrid(props) {
@@ -469,16 +489,11 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
         drawerPinIcon(element, targetsPinned));
     }
 
-    function useSpriteListTools() {
-        const {locale} = useContext(context);
-        const [mount] = useContext(targetTools) ?? [];
+    function useDrawerTools(searchLabel?: string) {
         const [searching, setSearching] = useState(false);
         const [query, setQuery] = useState('');
         const searchButton = useRef(null);
         const searchInput = useRef(null);
-        const japanese = isJapanese(locale);
-        const pinLabel = japanese ? 'スプライト一覧を固定表示' : 'Pin sprite list';
-        const searchLabel = japanese ? 'スプライトを検索' : 'Search sprites';
         useLayoutEffect(() => {
             if (searching) searchInput.current?.focus({preventScroll: true});
         }, [searching]);
@@ -487,18 +502,20 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
             setQuery('');
             searchButton.current?.focus();
         };
-        const renderTools = openAction => element(React.Fragment, null,
-            element('div', {className: styles.targetListTools, role: 'group',
-                'aria-label': japanese ? 'スプライト一覧の操作' : 'Sprite list tools'},
-            element('button', {type: 'button', ref: searchButton, 'aria-label': searchLabel, 'aria-expanded': searching,
-                title: searchLabel, onClick: () => searching ? closeSearch() : setSearching(true)},
-            element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
-                fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round'},
-            element('circle', {cx: 6.5, cy: 6.5, r: 4}), element('path', {d: 'm9.5 9.5 4 4'}))),
-            element(DrawerPinButton, {label: pinLabel}),
-            openAction),
-            searching && element('input', {type: 'search', className: styles.targetListSearch, 'aria-label': searchLabel,
-                ref: searchInput, placeholder: japanese ? '名前' : 'Name', value: query,
+        const render = ({label, pinLabel, openAction, tools}: {
+            label: string; pinLabel?: string; openAction?: import('react').ReactNode; tools?: import('react').ReactNode;
+        }) => element(React.Fragment, null,
+            element('div', {className: styles.targetListTools, role: 'group', 'aria-label': label},
+                tools,
+                searchLabel && element('button', {type: 'button', ref: searchButton, 'aria-label': searchLabel,
+                    'aria-expanded': searching, title: searchLabel, onClick: () => searching ? closeSearch() : setSearching(true)},
+                element('svg', {'aria-hidden': true, width: 14, height: 14, viewBox: '0 0 16 16',
+                    fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round'},
+                element('circle', {cx: 6.5, cy: 6.5, r: 4}), element('path', {d: 'm9.5 9.5 4 4'}))),
+                pinLabel && element(DrawerPinButton, {label: pinLabel}),
+                openAction),
+            searching && element('input', {type: 'search', className: styles.targetListSearch,
+                'aria-label': searchLabel, ref: searchInput, placeholder: searchLabel, value: query,
                 onChange: event => setQuery(event.currentTarget.value),
                 onKeyDown: event => {
                     if (event.key === 'Escape') {
@@ -506,8 +523,45 @@ export function createStandardLayout(React, {styles, targetStyles, context, Layo
                         closeSearch();
                     }
                 }}));
+        return {query, render};
+    }
+
+    function HostDrawerView({view, locale, active, dockRequest}: {
+        view: DrawerView; locale: string; active: boolean; dockRequest: number;
+    }) {
+        const title = view.label ?? drawerLabel(view.id, locale);
+        const japanese = isJapanese(locale);
+        const label = japanese ? `${title}の操作` : `${title} tools`;
+        const {query, render} = useDrawerTools(view.searchLabel?.(locale));
+        const renderHeading = openAction => render({
+            label,
+            pinLabel: japanese ? 'このパネルを固定表示' : 'Pin this panel',
+            openAction,
+            tools: view.tools?.({locale, query})
+        });
+        const renderContent = detached => (active || detached) && element('div', {
+            className: styles.drawerViewContent, 'data-drawer-content': view.id
+        },
+        detached && view.searchLabel && render({label}),
+        view.render({locale, query}));
+        if (!DrawerPanel && !active) return null;
+        return element('div', {className: styles.drawerHostView, hidden: !active}, DrawerPanel ?
+            element(DrawerPanel, {id: view.id, title, locale, dockRequest, renderHeading, renderContent}) :
+            element(React.Fragment, null, renderHeading(null), renderContent(false)));
+    }
+
+    function useSpriteListTools() {
+        const {locale} = useContext(context);
+        const [mount] = useContext(targetTools) ?? [];
+        const japanese = isJapanese(locale);
+        const {query, render} = useDrawerTools(japanese ? 'スプライトを検索' : 'Search sprites');
         return {
-            mount, query, renderTools,
+            mount, query,
+            renderTools: openAction => render({
+                label: japanese ? 'スプライト一覧の操作' : 'Sprite list tools',
+                pinLabel: japanese ? 'スプライト一覧を固定表示' : 'Pin sprite list',
+                openAction
+            }),
             title: japanese ? 'スプライト一覧' : 'Sprite list',
             openLabel: japanese ? 'アンドック' : 'Undock sprite list'
         };

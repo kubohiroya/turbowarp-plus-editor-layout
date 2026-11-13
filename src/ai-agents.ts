@@ -48,21 +48,28 @@ export function createAiAgents(React, {styles = {}, storage = browserStorage(), 
     };
     const settingsIcon = () => svg(element('path', {d: agentsIconPath}));
 
-    const openSettings = ({locale, returnFocus}: {locale: string; returnFocus?: HTMLElement | null}) =>
-        openAgentSettingsDialog({document, locale, styles, storage, storageKey, returnFocus, desktop});
+    const openSettings = ({locale, returnFocus, onSave, onDesktopSave}: {
+        locale: string; returnFocus?: HTMLElement | null; onSave?: () => void; onDesktopSave?: () => void;
+    }) => openAgentSettingsDialog({document: returnFocus?.ownerDocument ?? document, locale, styles, storage,
+        storageKey, returnFocus, onSave, desktop, onDesktopSave});
 
-    function AgentMenu({locale, close}: DrawerMenuRenderProps) {
-        const [services] = useState(() => enabledAgentServices(readAgentSettings(storage, storageKey)));
+    function AgentList({locale, close}: Omit<DrawerMenuRenderProps, 'close'> & {close?: () => void}) {
+        const [services, setServices] = useState(() => enabledAgentServices(readAgentSettings(storage, storageKey)));
         const [applications, setApplications] = useState([] as DesktopAgent[]);
         const [error, setError] = useState(null as {code: string; url?: string} | null);
         const active = useRef(true);
+        const refreshApplications = async () => {
+            if (!desktop) return;
+            const result = await agentRequest(() => desktop.list());
+            if (!active.current) return;
+            if ('value' in result) {
+                setApplications(result.value.entries);
+                setError(null);
+            } else setError({code: result.code});
+        };
         useEffect(() => {
             active.current = true;
-            if (desktop) void agentRequest(() => desktop.list()).then(result => {
-                if (!active.current) return;
-                if ('value' in result) setApplications(result.value.entries);
-                else setError({code: result.code});
-            });
+            void refreshApplications();
             return () => { active.current = false; };
         }, []);
         const list = useRef(null);
@@ -83,14 +90,14 @@ export function createAiAgents(React, {styles = {}, storage = browserStorage(), 
             items[next]?.focus();
         };
         const item = (key: string, icon, text: string, onClick: () => void, title?: string) => element('button', {
-            key, type: 'button', role: 'menuitem', tabIndex: -1, className: styles.aiAgentMenuItem, title, onClick
+            key, type: 'button', role: close ? 'menuitem' : undefined, tabIndex: close ? -1 : undefined, className: styles.aiAgentMenuItem, title, onClick
         }, icon, element('span', null, text));
         const hasEntries = services.length + applications.length > 0;
         const launch = async (application: DesktopAgent) => {
             setError(null);
             const result = await agentRequest(() => desktop.launch(application.id));
             if (!active.current) return;
-            if ('value' in result) close();
+            if ('value' in result) close?.();
             else {
                 const checked = checkAgentUrl(application.url);
                 setError({code: result.code, ...('url' in checked ? checked : {})});
@@ -100,30 +107,35 @@ export function createAiAgents(React, {styles = {}, storage = browserStorage(), 
             error && element('p', {role: 'alert', className: styles.aiAgentMenuHint}, desktopAgentError(error.code, locale)),
             !hasEntries && element('p', {id: hintId.current, className: styles.aiAgentMenuHint}, agentText('empty', locale)),
             element('div', {
-                role: 'menu', 'aria-label': label, ref: list, className: styles.aiAgentMenu, onKeyDown: move,
+                role: close ? 'menu' : 'group', 'aria-label': label, ref: list, className: styles.aiAgentMenu,
+                onKeyDown: close ? move : undefined,
                 'aria-describedby': hasEntries ? undefined : hintId.current
             },
             services.map(service => item(service.id, serviceIcon(service), service.name, () => {
                 openAgentService(service, open);
-                close();
+                close?.();
             }, newTab)),
             applications.map(application => item(`desktop-${application.id}`, settingsIcon(), application.name,
                 () => void launch(application), desktopAgentText('opensApp', locale))),
             error?.url && item('fallback', serviceIcon(), desktopAgentText('openFallback', locale), () => {
                 open(error.url, '_blank', 'noopener,noreferrer');
-                close();
+                close?.();
             }, newTab),
             hasEntries && element('div', {role: 'separator', className: styles.aiAgentMenuSeparator}),
             item('settings', settingsIcon(), agentText('settings', locale), () => {
-                close();
-                openSettings({locale, returnFocus: document.activeElement as HTMLElement});
+                const doc = list.current.ownerDocument;
+                close?.();
+                openSettings({locale, returnFocus: doc.activeElement as HTMLElement,
+                    onSave: close ? undefined : () => setServices(enabledAgentServices(readAgentSettings(storage, storageKey))),
+                    onDesktopSave: close ? undefined : () => { void refreshApplications(); }});
             })));
     }
 
     const drawerMenu: DrawerMenu = {
-        renderMenu: props => element(AgentMenu, props)
+        renderMenu: props => element(AgentList, props)
     };
-    return {drawerMenu, openSettings, settingsIcon, serviceIcon};
+    return {drawerMenu, renderPanel: ({locale}: {locale: string}) => element(AgentList, {locale}),
+        openSettings, settingsIcon, serviceIcon};
 }
 
 let nextId = 0;
