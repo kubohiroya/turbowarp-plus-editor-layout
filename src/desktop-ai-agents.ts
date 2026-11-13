@@ -83,7 +83,8 @@ export async function agentRequest<T>(request: () => Promise<Result<T>>): Promis
 }
 
 /** An optional section of the existing settings dialog. Its changes are saved by the Desktop host. */
-export function desktopAgentSettings(doc: Document, port: DesktopAiAgentsPort, locale: string, styles: Record<string, string>) {
+export function desktopAgentSettings(doc: Document, port: DesktopAiAgentsPort, locale: string,
+    styles: Record<string, string>, onSave?: () => void) {
     const text = (key: keyof typeof strings) => desktopAgentText(key, locale);
     const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, content?: string) => {
         const node = doc.createElement(tag);
@@ -153,6 +154,7 @@ export function desktopAgentSettings(doc: Document, port: DesktopAiAgentsPort, l
             entries = value.entries.map(entry => ({...entry}));
             render();
             status.textContent = text('saved');
+            onSave?.();
         });
     });
 

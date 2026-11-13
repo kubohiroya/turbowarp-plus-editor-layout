@@ -176,6 +176,7 @@ export interface AgentSettingsDialogOptions {
     returnFocus?: HTMLElement | null;
     onSave?(settings: AgentSettings): void;
     desktop?: DesktopAiAgentsPort | null;
+    onDesktopSave?(): void;
 }
 
 export interface AgentSettingsDialog {
@@ -201,7 +202,7 @@ const urlProblems = {empty: 'urlEmpty', invalid: 'urlInvalid', 'not-https': 'url
  * user's own services. It is plain DOM so that any part of the Editor can open it, with or without React.
  */
 export function openAgentSettingsDialog({document: doc = globalThis.document, locale, styles = {}, storage = browserStorage(),
-    storageKey = agentSettingsKey, returnFocus, onSave, desktop}: AgentSettingsDialogOptions): AgentSettingsDialog {
+    storageKey = agentSettingsKey, returnFocus, onSave, desktop, onDesktopSave}: AgentSettingsDialogOptions): AgentSettingsDialog {
     if (openDialog?.element.isConnected) {
         (openDialog.element.querySelector(focusable) as HTMLElement)?.focus();
         return openDialog;
@@ -306,7 +307,7 @@ export function openAgentSettingsDialog({document: doc = globalThis.document, lo
     const save = make('button', {type: 'submit', class: `${styles.aiAgentDialogButton ?? ''} ${styles.aiAgentDialogPrimary ?? ''}`.trim()},
         text('save'));
     const form = make('form', {novalidate: '', class: styles.aiAgentDialogForm}, presetGroup, customGroup,
-        desktop && desktopAgentSettings(doc, desktop, locale, styles), status,
+        desktop && desktopAgentSettings(doc, desktop, locale, styles, onDesktopSave), status,
         make('div', {class: styles.aiAgentDialogActions}, cancel, save));
     const element = make('div', {
         role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': `${prefix}-title`,

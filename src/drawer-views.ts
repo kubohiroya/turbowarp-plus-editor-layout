@@ -1,13 +1,15 @@
 import type {ReactNode} from 'react';
 
 /** The contents the left drawer can show. `sprites` is the GUI's sprite list and backdrop, always available. */
-export type DrawerViewId = 'sprites' | 'project' | 'git-history';
+export type DrawerViewId = 'sprites' | 'project' | 'git-history' | 'agents';
 /** The contents a host supplies. */
 export type HostDrawerViewId = Exclude<DrawerViewId, 'sprites'>;
 
 export interface DrawerRenderProps {
     /** The Editor locale, for example `ja` or `en`. */
     locale: string;
+    /** The search text supplied by the drawer's search field. */
+    query?: string;
 }
 
 /** A drawer content supplied by the host. Its button appears only while the host supplies it. */
@@ -21,6 +23,8 @@ export interface DrawerView {
     render(props: DrawerRenderProps): ReactNode;
     /** The view's own tools, shown where the sprite list shows search, pin and undock. */
     tools?(props: DrawerRenderProps): ReactNode;
+    /** The accessible name of the search field, if this view supports search. */
+    searchLabel?(locale: string): string;
 }
 
 export interface DrawerMenuRenderProps extends DrawerRenderProps {
@@ -40,9 +44,13 @@ export interface DrawerMenu {
 export interface DrawerViews {
     views?: readonly DrawerView[];
     agents?: DrawerMenu;
+    /** Reports the drawer view presented by the standard layout. */
+    onSelectionChange?(view: DrawerViewId): void;
+    /** Exposes the drawer's reveal action to other panels in the same Editor. */
+    registerReveal?(reveal: (id: HostDrawerViewId) => void): () => void;
 }
 
-export const drawerViewIds: readonly DrawerViewId[] = ['sprites', 'project', 'git-history'];
+export const drawerViewIds: readonly DrawerViewId[] = ['sprites', 'project', 'git-history', 'agents'];
 const hostIds = new Set<string>(drawerViewIds.slice(1));
 
 const names = {
@@ -104,6 +112,8 @@ export function writeDrawerView(storage: DrawerStorage | null | undefined, stora
     }
 }
 
+export const projectFolderIconPath = 'M1.5 4V13h13V5.5H8L6.5 3.5h-4A1 1 0 0 0 1.5 4.5Z';
+
 let nextMenuId = 0;
 
 export function createDrawerViewBar(React, styles) {
@@ -116,7 +126,7 @@ export function createDrawerViewBar(React, styles) {
         sprites: () => svg(element('rect', {x: 2, y: 2, width: 5, height: 5, rx: 1}),
             element('rect', {x: 9, y: 2, width: 5, height: 5, rx: 1}),
             element('rect', {x: 2, y: 9, width: 12, height: 5, rx: 1})),
-        project: () => svg(element('path', {d: 'M1.5 4V13h13V5.5H8L6.5 3.5h-4A1 1 0 0 0 1.5 4.5Z'})),
+        project: () => svg(element('path', {d: projectFolderIconPath})),
         'git-history': () => svg(element('circle', {cx: 5, cy: 3.5, r: 1.5}), element('circle', {cx: 5, cy: 12.5, r: 1.5}),
             element('circle', {cx: 11, cy: 6.5, r: 1.5}), element('path', {d: 'M5 5v6M11 8c0 2.5-6 1.5-6 3'})),
         agents: () => svg(element('path', {d: agentsIconPath}))
@@ -172,7 +182,8 @@ export function createDrawerViewBar(React, styles) {
             ...views.map(view => ({id: view.id, label: view.label ?? drawerLabel(view.id, locale),
                 icon: view.icon ?? icons[view.id]()}))
         ];
-        const count = entries.length + (agents ? 1 : 0);
+        const menu = entries.some(entry => entry.id === 'agents') ? undefined : agents;
+        const count = entries.length + (menu ? 1 : 0);
         const [focused, setFocused] = useState(() => Math.max(0, entries.findIndex(entry => entry.id === selected)));
         const current = Math.min(focused, count - 1);
         const move = (event, index) => {
@@ -200,8 +211,8 @@ export function createDrawerViewBar(React, styles) {
             onClick: () => onSelect(entry.id),
             onKeyDown: event => move(event, index)
         }, entry.icon)),
-        agents && element(AgentMenu, {
-            menu: agents, locale, button: agentButton,
+        menu && element(AgentMenu, {
+            menu, locale, button: agentButton,
             tabIndex: current === entries.length ? 0 : -1,
             onFocus: () => setFocused(entries.length),
             onKeyDown: event => move(event, entries.length)

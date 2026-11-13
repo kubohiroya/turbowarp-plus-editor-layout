@@ -15,6 +15,8 @@ test('the selected drawer view is saved beside the layout and read back only whe
     assert.equal(storage.values.get('layout.drawer'), '{"version":1,"view":"git-history"}');
     assert.equal(readDrawerView(storage, 'layout'), 'git-history');
     storage.values.set('layout.drawer', '{"version":1,"view":"agents"}');
+    assert.equal(readDrawerView(storage, 'layout'), 'agents');
+    storage.values.set('layout.drawer', '{"version":1,"view":"unknown"}');
     assert.equal(readDrawerView(storage, 'layout'), 'sprites');
     storage.values.set('layout.drawer', '{');
     assert.equal(readDrawerView(storage, 'layout'), 'sprites');
@@ -143,7 +145,8 @@ test('the bar shows one icon button per supplied content and switches the drawer
     assert.ok(document.querySelector('[data-project]'));
     assert.ok(spriteTools().closest('[hidden]'), 'the sprite list and its tools are hidden');
     assert.ok(button('Refresh'), 'the selected view shows its own tools');
-    assert.ok(bar.nextElementSibling?.contains(button('Refresh')), 'in the place of the sprite list tools');
+    assert.ok(button('Refresh')?.closest('[role="group"][aria-label="プロジェクトフォルダの操作"]'));
+    assert.ok(button('Refresh')?.closest('.drawerHostView')?.contains(document.querySelector('[data-project]')));
     assert.equal(storage.values.get('layout.drawer'), '{"version":1,"view":"project"}');
 
     click(button('Git 履歴')!);

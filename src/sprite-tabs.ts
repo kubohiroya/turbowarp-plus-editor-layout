@@ -12,6 +12,7 @@ import type {SpriteSearchResult} from '@kubohiroya/turbowarp-plus-editor-sprite-
 import type {DockviewStagePane} from './dockview-stage.ts';
 import {documentPanelTitle, getDocumentWorkspace} from './document-workspace.ts';
 import type {DocumentPanelRequest} from './document-workspace.ts';
+import {projectFolderIconPath} from './drawer-views.ts';
 import {dockPopoutGroups, positionOnScreen, readWorkspaceLayout, workspaceWithoutTransientPanels}
     from './workspace-layout.ts';
 import type {PanelReference, SavedPopout, WorkspaceLayout} from './workspace-layout.ts';
@@ -220,6 +221,7 @@ const projectSignature = (targets: readonly Target[]) => JSON.stringify(targets
 
 class SpriteTab extends DefaultTab {
     private readonly icon: HTMLImageElement;
+    private readonly folderIcon: SVGSVGElement;
 
     constructor(document: Document) {
         super();
@@ -227,6 +229,20 @@ class SpriteTab extends DefaultTab {
         this.icon.className = 'tw-plus-sprite-tab-icon';
         this.icon.alt = '';
         this.icon.draggable = false;
+        const svg = 'http://www.w3.org/2000/svg';
+        this.folderIcon = document.createElementNS(svg, 'svg');
+        this.folderIcon.classList.add('tw-plus-sprite-tab-icon', 'tw-plus-folder-tab-icon');
+        this.folderIcon.setAttribute('viewBox', '0 0 16 16');
+        this.folderIcon.setAttribute('fill', 'none');
+        this.folderIcon.setAttribute('stroke', 'currentColor');
+        this.folderIcon.setAttribute('stroke-width', '1.3');
+        this.folderIcon.setAttribute('stroke-linecap', 'round');
+        this.folderIcon.setAttribute('stroke-linejoin', 'round');
+        this.folderIcon.setAttribute('aria-hidden', 'true');
+        const path = document.createElementNS(svg, 'path');
+        path.setAttribute('d', projectFolderIconPath);
+        this.folderIcon.append(path);
+        this.element.prepend(this.folderIcon);
         this.element.prepend(this.icon);
     }
 
@@ -235,7 +251,10 @@ class SpriteTab extends DefaultTab {
         this.update(options);
     }
 
-    update({params}: {params: {icon?: string}}) {
+    update({params}: {params: {icon?: string; fixedProjectTab?: boolean}}) {
+        this.element.toggleAttribute('data-fixed-project-tab', Boolean(params.fixedProjectTab));
+        const close = this.element.querySelector<HTMLElement>('.dv-default-tab-action');
+        if (close) close.style.display = params.fixedProjectTab ? 'none' : '';
         this.icon.hidden = !params.icon;
         if (params.icon) this.icon.src = params.icon;
         else this.icon.removeAttribute('src');
@@ -285,7 +304,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     let initialShape: string | undefined;
     let disposed = false;
     const window = document.defaultView;
-    const documentWorkspace = multiView && getDocumentWorkspace(vm);
+    const documentWorkspace = multiView ? getDocumentWorkspace(vm) : undefined;
     let pendingRestore = Boolean(persistence);
     let drawerEditedDuringRestore = false;
     let restoreFrame: number | undefined;
@@ -319,7 +338,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                 for (const id of [...tabGroup.panelIds]) dockview.getPanel(id)?.api.close();
             }},
             {label: chipText.closeAll, action: () => {
-                for (const panel of [...group.panels]) if (documents.has(panel.id)) panel.api.close();
+                for (const panel of [...group.panels]) if (documents.has(panel.id) && !fixedProjectTab(panel.id)) panel.api.close();
             }}
         ],
         getTabContextMenuItems: ({panel}) => {
@@ -352,7 +371,8 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
                     const item = documents.get(componentId);
                     element.dataset.providerId = item.request.reference.providerId;
                     element.dataset.documentId = item.request.reference.documentId;
-                    item.session = item.request.mount(element, () => api.close());
+                    item.session = item.request.mount(element, () => api.close(), documentWorkspace?.notifySave);
+                    documentWorkspace?.notifySave();
                 }};
             }
             if (name === stagePanelId) {
@@ -434,11 +454,14 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             preventSplit(event);
             return;
         }
-        if (event.group?.api.location.type !== 'popout') return;
         const transfer = event.getData();
         const ids = transfer?.panelId ? [transfer.panelId] :
             dockview.groups.find(group => group.id === transfer?.groupId)?.panels.map(panel => panel.id) ?? [];
-        if (ids.some(id => documents.has(id))) event.preventDefault();
+        if (ids.some(fixedProjectTab) ||
+            event.group?.api.location.type === 'popout' && ids.some(id => documents.has(id))) event.preventDefault();
+    });
+    const dragFixedTab = dockview.onWillDragPanel(({panel, nativeEvent}) => {
+        if (fixedProjectTab(panel.id)) nativeEvent.preventDefault();
     });
 
     function createLayoutMenu(group: DockviewGroupPanel) {
@@ -757,7 +780,37 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         }
     }
 
+    function fixedProjectTab(id: string) {
+        return documentWorkspace?.saveScope === 'tab' && documents.get(id)?.request.pinWithProjectFolder === true;
+    }
+
+    function leftmostGroup() {
+        return dockview.groups.filter(group => group.api.location.type === 'grid')
+            .map(group => ({group, rect: group.element.getBoundingClientRect()}))
+            .sort((a, b) => a.rect.left - b.rect.left || a.rect.top - b.rect.top)[0]?.group;
+    }
+
+    function syncFixedProjectTab() {
+        if (disposed || syncing) return;
+        for (const [id, {request}] of documents) {
+            if (!request.pinWithProjectFolder) continue;
+            const panel = dockview.getPanel(id);
+            if (!panel) continue;
+            const fixed = fixedProjectTab(id);
+            if (panel.api.getParameters().fixedProjectTab !== fixed) panel.api.updateParameters({fixedProjectTab: fixed});
+            const group = fixed && leftmostGroup();
+            if (group && group.panels[0]?.id !== id) panel.api.moveTo({group, index: 0, skipSetActive: !panel.api.isActive});
+        }
+    }
+
     function openDocument(request: DocumentPanelRequest) {
+        // An automatically opened utility must not interrupt a project's saved layout restoration.
+        if (pendingRestore && request.inactive && request.pinWithProjectFolder) {
+            void layoutSettled().then(() => {
+                if (!disposed && documentWorkspace?.saveScope === 'tab') openDocument(request);
+            });
+            return;
+        }
         if (pendingRestore) finishRestore();
         const {providerId, documentId} = request.reference;
         for (const [id, {request: opened}] of documents) {
@@ -771,11 +824,13 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             id = 'document-view-' + ++nextView;
         } while (views.has(id) || documents.has(id) || vm.runtime.targets.some(target => target.id === id));
         const title = documentPanelTitle(request);
-        const position = documentPosition(request);
+        const fixed = request.pinWithProjectFolder && documentWorkspace?.saveScope === 'tab';
+        const group = fixed && leftmostGroup();
+        const position = group ? {referenceGroup: group, index: 0} : documentPosition(request);
         documents.set(id, {request});
         try {
             dockview.addPanel({id, title, component: documentComponent, renderer: 'always',
-                inactive: request.inactive, ...(position && {position})});
+                inactive: request.inactive, params: {fixedProjectTab: Boolean(fixed)}, ...(position && {position})});
         } catch (error) {
             documents.get(id)?.session?.dispose();
             documents.delete(id);
@@ -809,14 +864,16 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     function guardDocumentClose(event: MouseEvent | KeyboardEvent) {
         const element = event.target as HTMLElement;
         const tab = element.closest<HTMLElement>('[data-tab-panel-id]');
-        const item = documents.get(tab?.dataset.tabPanelId);
+        const id = tab?.dataset.tabPanelId;
+        if (!id) return;
+        const item = documents.get(id);
         if (!item) return;
         const close = event.type === 'click' ? Boolean(element.closest('.dv-default-tab-action')) :
             event.target === tab && ['Delete', 'Backspace'].includes((event as KeyboardEvent).key);
         if (!close) return;
         event.preventDefault();
         event.stopPropagation();
-        item.session?.requestClose();
+        if (!fixedProjectTab(id)) item.session?.requestClose();
     }
 
     function canCloseGroup(group: DockviewGroupPanel) {
@@ -1205,6 +1262,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
     }
 
     const selection = dockview.onDidActivePanelChange(({panel}) => {
+        documentWorkspace?.notifySave();
         if (syncing) return;
         syncing = true;
         try {
@@ -1219,6 +1277,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         if (item) {
             documents.delete(panel.id);
             item.session?.dispose();
+            documentWorkspace?.notifySave();
             return;
         }
         if (panel.id === stagePanelId) {
@@ -1232,10 +1291,20 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
         if (![...views.values()].some(item => item.target === view.target)) closed.add(view.target);
     });
     const layout = multiView && dockview.onDidLayoutChange(() => {
+        syncFixedProjectTab();
         refreshSurfaces();
         scheduleSave();
     });
-    const disconnectDocuments = documentWorkspace && documentWorkspace.connect(openDocument);
+    const disconnectDocuments = documentWorkspace && documentWorkspace.connect(openDocument,
+        () => documents.get(dockview.activePanel?.id)?.session,
+        function* () {for (const item of documents.values()) yield item.session;});
+    let previousScope = documentWorkspace?.saveScope;
+    const unsubscribeFixedProjectTab = documentWorkspace?.subscribeSave(() => {
+        const scope = documentWorkspace.saveScope;
+        if (scope === previousScope) return;
+        previousScope = scope;
+        syncFixedProjectTab();
+    });
     const unsubscribeDocuments = persistence && documentWorkspace && documentWorkspace.subscribe(scheduleRestore);
     projectLoading = Boolean(persistence && persistence.isProjectLoading?.());
     const unsubscribeProject = persistence && persistence.subscribeProject?.(projectChanged);
@@ -1277,6 +1346,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             window.clearTimeout(restoreTimeout);
             if (persistence) window.removeEventListener('pagehide', flushLayout);
             if (unsubscribeDocuments) unsubscribeDocuments();
+            unsubscribeFixedProjectTab?.();
             if (unsubscribeProject) unsubscribeProject();
             if (unsubscribeDrawer) unsubscribeDrawer();
             if (disconnectDocuments) disconnectDocuments();
@@ -1292,6 +1362,7 @@ export function mountSpriteTabs<Snapshot>(root: HTMLElement, content: HTMLElemen
             removal.dispose();
             if (overlay) overlay.dispose();
             drop.dispose();
+            dragFixedTab.dispose();
             if (layout) layout.dispose();
             for (const view of views.values()) disposeView(view);
             content.remove();
