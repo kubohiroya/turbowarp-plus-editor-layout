@@ -5,7 +5,7 @@ import type {DockviewGroupPanel, GroupPanelPartInitParameters, IDockviewPanel, S
 import {createSpriteLayoutMenu} from './sprite-layout-menu.ts';
 import {NativeAssetPanel, SpriteAssetPane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 import type {NativeAssetPanelRenderer, NativeAssetSelector, SpriteAssetKind, SpriteAssetLayout, SpriteAssetPreviewItem,
-    SpriteVariable} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
+    SpriteVariable, SpriteVariablePaneProps} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 import type {SpritePropertiesPanelProps} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-properties';
 import {SpriteEditorToolbar, spriteEditorSections} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-editor-toolbar';
 import type {SpriteSearchResult} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-editor-toolbar';
@@ -1390,6 +1390,9 @@ type SpriteTabsProps<Snapshot> = Omit<TabOptions<Snapshot>, 'activateSection' | 
     writeProperties?: SpritePropertiesPanelProps['onChange'];
     writeVariable?(targetId: string, id: string, value: SpriteVariable['value']): void;
     editVariable?(targetId: string, edit: SpriteVariableEdit): SpriteVariableEditError | void;
+    /** Wrap a variables pane while receiving its docked view and original target identities. */
+    wrapVariablePane?(viewId: string, targetId: string, editable: boolean,
+        pane: React.ReactElement<SpriteVariablePaneProps>): React.ReactNode;
     /** What this target sends and receives. `scanTargetMessages` builds it from the runtime. */
     getMessages?(targetId: string): TargetMessages;
     /** Open the block that sends or receives a message. */
@@ -1577,7 +1580,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                             if (section === 'code') props.openCodeSearchResult?.(view.targetId, result.id);
                             else if (section === 'variables') {
                                 const field = assetPreviewSlots.find(slot => slot.id === view.id)?.element;
-                                [...(field?.querySelectorAll<HTMLInputElement>('input[data-variable-id]') ?? [])]
+                                [...(field?.querySelectorAll<HTMLElement>('[data-variable-id]') ?? [])]
                                     .find(input => input.dataset.variableId === result.id)?.focus();
                             } else if (section === 'messages') {
                                 const pane = assetPreviewSlots.find(slot => slot.id === view.id)?.element;
@@ -1598,22 +1601,28 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                     if (!result) workspace?.refreshSurfaces();
                     return result;
                 })
-            }) : kind === 'variables' ? React.createElement(SpriteAssetPane, {
-                kind, locale: props.locale, editable, variables: props.getVariables?.(targetId) ?? [],
-                properties: props.getProperties?.(targetId),
-                targetId,
-                onWriteProperties(id: string, patch: Parameters<SpritePropertiesPanelProps['onChange']>[1]) {
-                    props.writeProperties?.(id, patch);
-                    workspace?.refreshSurfaces();
-                },
-                onWrite(variableId, value) {
-                    props.writeVariable?.(targetId, variableId, value);
-                    workspace?.refreshSurfaces();
-                },
-                onEdit: props.editVariable && (edit => props.editVariable!(targetId, edit))
-            }) : props.getAssetPreview && React.createElement(AssetPreview, {
-                locale: props.locale, kind, selected, renderLayout, scrollTop, data: props.getAssetPreview(targetId, kind)
-            }), element, id)));
+            }) : kind === 'variables' ? renderVariablePane(id, targetId, editable) :
+                props.getAssetPreview && React.createElement(AssetPreview, {
+                    locale: props.locale, kind, selected, renderLayout, scrollTop, data: props.getAssetPreview(targetId, kind)
+                }), element, id)));
+
+    function renderVariablePane(id: string, targetId: string, editable: boolean) {
+        const pane = React.createElement<SpriteVariablePaneProps>(SpriteAssetPane, {
+            kind: 'variables', locale: props.locale, editable, variables: props.getVariables?.(targetId) ?? [],
+            properties: props.getProperties?.(targetId),
+            targetId,
+            onWriteProperties(id: string, patch: Parameters<SpritePropertiesPanelProps['onChange']>[1]) {
+                props.writeProperties?.(id, patch);
+                workspace?.refreshSurfaces();
+            },
+            onWrite(variableId, value) {
+                props.writeVariable?.(targetId, variableId, value);
+                workspace?.refreshSurfaces();
+            },
+            onEdit: props.editVariable && (edit => props.editVariable!(targetId, edit))
+        });
+        return props.wrapVariablePane?.(id, targetId, editable, pane) ?? pane;
+    }
 }
 
 export function useSpriteTabs<Snapshot>({available, enabled, locale, ...props}:
