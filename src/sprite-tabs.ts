@@ -1390,6 +1390,8 @@ type SpriteTabsProps<Snapshot> = Omit<TabOptions<Snapshot>, 'activateSection' | 
     writeProperties?: SpritePropertiesPanelProps['onChange'];
     writeVariable?(targetId: string, id: string, value: SpriteVariable['value']): void;
     editVariable?(targetId: string, edit: SpriteVariableEdit): SpriteVariableEditError | void;
+    /** Wrap a variables pane while receiving its docked view and original target identities. */
+    wrapVariablePane?(viewId: string, targetId: string, editable: boolean, pane: React.ReactNode): React.ReactNode;
     /** What this target sends and receives. `scanTargetMessages` builds it from the runtime. */
     getMessages?(targetId: string): TargetMessages;
     /** Open the block that sends or receives a message. */
@@ -1598,22 +1600,28 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                     if (!result) workspace?.refreshSurfaces();
                     return result;
                 })
-            }) : kind === 'variables' ? React.createElement(SpriteAssetPane, {
-                kind, locale: props.locale, editable, variables: props.getVariables?.(targetId) ?? [],
-                properties: props.getProperties?.(targetId),
-                targetId,
-                onWriteProperties(id: string, patch: Parameters<SpritePropertiesPanelProps['onChange']>[1]) {
-                    props.writeProperties?.(id, patch);
-                    workspace?.refreshSurfaces();
-                },
-                onWrite(variableId, value) {
-                    props.writeVariable?.(targetId, variableId, value);
-                    workspace?.refreshSurfaces();
-                },
-                onEdit: props.editVariable && (edit => props.editVariable!(targetId, edit))
-            }) : props.getAssetPreview && React.createElement(AssetPreview, {
-                locale: props.locale, kind, selected, renderLayout, scrollTop, data: props.getAssetPreview(targetId, kind)
-            }), element, id)));
+            }) : kind === 'variables' ? renderVariablePane(id, targetId, editable) :
+                props.getAssetPreview && React.createElement(AssetPreview, {
+                    locale: props.locale, kind, selected, renderLayout, scrollTop, data: props.getAssetPreview(targetId, kind)
+                }), element, id)));
+
+    function renderVariablePane(id: string, targetId: string, editable: boolean) {
+        const pane = React.createElement(SpriteAssetPane, {
+            kind: 'variables', locale: props.locale, editable, variables: props.getVariables?.(targetId) ?? [],
+            properties: props.getProperties?.(targetId),
+            targetId,
+            onWriteProperties(id: string, patch: Parameters<SpritePropertiesPanelProps['onChange']>[1]) {
+                props.writeProperties?.(id, patch);
+                workspace?.refreshSurfaces();
+            },
+            onWrite(variableId, value) {
+                props.writeVariable?.(targetId, variableId, value);
+                workspace?.refreshSurfaces();
+            },
+            onEdit: props.editVariable && (edit => props.editVariable!(targetId, edit))
+        });
+        return props.wrapVariablePane?.(id, targetId, editable, pane) ?? pane;
+    }
 }
 
 export function useSpriteTabs<Snapshot>({available, enabled, locale, ...props}:
