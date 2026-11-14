@@ -5,7 +5,7 @@ import type {DockviewGroupPanel, GroupPanelPartInitParameters, IDockviewPanel, S
 import {createSpriteLayoutMenu} from './sprite-layout-menu.ts';
 import {NativeAssetPanel, SpriteAssetPane} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 import type {NativeAssetPanelRenderer, NativeAssetSelector, SpriteAssetKind, SpriteAssetLayout, SpriteAssetPreviewItem,
-    SpriteVariable} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
+    SpriteVariable, SpriteVariablePaneProps} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-asset-pane';
 import type {SpritePropertiesPanelProps} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-properties';
 import {SpriteEditorToolbar, spriteEditorSections} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-editor-toolbar';
 import type {SpriteSearchResult} from '@kubohiroya/turbowarp-plus-editor-sprite-panes/sprite-editor-toolbar';
@@ -1391,7 +1391,8 @@ type SpriteTabsProps<Snapshot> = Omit<TabOptions<Snapshot>, 'activateSection' | 
     writeVariable?(targetId: string, id: string, value: SpriteVariable['value']): void;
     editVariable?(targetId: string, edit: SpriteVariableEdit): SpriteVariableEditError | void;
     /** Wrap a variables pane while receiving its docked view and original target identities. */
-    wrapVariablePane?(viewId: string, targetId: string, editable: boolean, pane: React.ReactNode): React.ReactNode;
+    wrapVariablePane?(viewId: string, targetId: string, editable: boolean,
+        pane: React.ReactElement<SpriteVariablePaneProps>): React.ReactNode;
     /** What this target sends and receives. `scanTargetMessages` builds it from the runtime. */
     getMessages?(targetId: string): TargetMessages;
     /** Open the block that sends or receives a message. */
@@ -1606,7 +1607,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                 }), element, id)));
 
     function renderVariablePane(id: string, targetId: string, editable: boolean) {
-        const pane = React.createElement(SpriteAssetPane, {
+        const pane = React.createElement<SpriteVariablePaneProps>(SpriteAssetPane, {
             kind: 'variables', locale: props.locale, editable, variables: props.getVariables?.(targetId) ?? [],
             properties: props.getProperties?.(targetId),
             targetId,
