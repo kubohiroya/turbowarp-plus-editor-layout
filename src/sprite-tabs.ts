@@ -1580,7 +1580,7 @@ function SpriteTabs<Snapshot>(props: SpriteTabsProps<Snapshot>) {
                             if (section === 'code') props.openCodeSearchResult?.(view.targetId, result.id);
                             else if (section === 'variables') {
                                 const field = assetPreviewSlots.find(slot => slot.id === view.id)?.element;
-                                [...(field?.querySelectorAll<HTMLInputElement>('input[data-variable-id]') ?? [])]
+                                [...(field?.querySelectorAll<HTMLElement>('[data-variable-id]') ?? [])]
                                     .find(input => input.dataset.variableId === result.id)?.focus();
                             } else if (section === 'messages') {
                                 const pane = assetPreviewSlots.find(slot => slot.id === view.id)?.element;
